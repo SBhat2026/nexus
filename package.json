@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "smoke": "tsx scripts/smokeTestSeeds.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",
@@ -16,6 +17,7 @@
     "density-clustering": "^1.3.0",
     "framer-motion": "^12.40.0",
     "lucide-react": "^1.16.0",
+    "ml-isolation-forest": "^0.1.0",
     "next": "16.2.6",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -23,12 +25,14 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/density-clustering": "^1.3.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
+    "tsx": "^4.22.3",
     "typescript": "^5"
   }
 }
