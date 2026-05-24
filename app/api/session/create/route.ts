@@ -18,8 +18,9 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: 'seedTopic must be 2-300 characters' }, { status: 400 })
     }
 
-    // 1. Search S2 for papers
-    const searchResults = await searchPapers(seedTopic, 30)
+    // 1. Search S2 for papers (20 keyless, 30 with key — stay within 100 req/5min budget)
+    const limit = process.env.SEMANTIC_SCHOLAR_API_KEY ? 30 : 20
+    const searchResults = await searchPapers(seedTopic, limit)
     if (searchResults.length === 0) {
       return Response.json({ error: 'No papers found for this topic', sessionId: null, graph: null }, { status: 200 })
     }
