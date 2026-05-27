@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useImperativeHandle, forwardRef, useMemo } from 'react'
 import * as d3 from 'd3'
+import { useSessionStore } from '@/store/useSessionStore'
 import type { GraphData, GraphNode, GraphEdge, ClusterNode, PaperNode, DirectionNode, OutlierNode, LayerToggles } from '@/lib/types'
 
 const FIELD_COLORS: Record<string, string> = {
@@ -34,16 +35,18 @@ interface Props {
   onSelectNode: (id: string | null, type: string | null) => void
   selectedNodeId: string | null
   pruned: Set<string>
+  isDark: boolean
 }
 
 const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
-  { data, layerToggles, onSelectNode, selectedNodeId, pruned },
+  { data, layerToggles, onSelectNode, selectedNodeId, pruned, isDark },
   ref
 ) {
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const simRef = useRef<d3.Simulation<GraphNode, GraphEdge> | null>(null)
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null)
+  const { expandedClusters, toggleCluster, focusedClusterId, setFocusedCluster, readPaperIds } = useSessionStore()
 
   useImperativeHandle(ref, () => ({
     focusNode(id: string) {
@@ -59,16 +62,65 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
   }))
 
   const visibleNodeIds = useMemo(() => {
-    const ids = new Set<string>()
+    const papersPerCluster = Infinity
+
+    // Pre-rank papers per cluster by citation count (desc)
+    const papersByCluster = new Map<string, PaperNode[]>()
     data.nodes.forEach((n) => {
-      if (n.nodeType === 'paper' && !layerToggles.papers) return
-      if (n.nodeType === 'direction' && !layerToggles.directions) return
-      if (n.nodeType === 'outlier' && !layerToggles.outliers) return
-      if ((n.nodeType === 'cluster') && pruned.has(n.id) && !layerToggles.pruned) return
+      if (n.nodeType === 'paper') {
+        const p = n as PaperNode
+        if (p.clusterId) {
+          const arr = papersByCluster.get(p.clusterId) ?? []
+          arr.push(p)
+          papersByCluster.set(p.clusterId, arr)
+        }
+      }
+    })
+    const topPaperIds = new Set<string>()
+    papersByCluster.forEach((papers) => {
+      const sorted = [...papers].sort((a, b) => b.citationCount - a.citationCount)
+      sorted.slice(0, papersPerCluster).forEach((p) => topPaperIds.add(p.id))
+    })
+
+    const ids = new Set<string>()
+    const top2OutlierIds = new Set(
+      data.nodes
+        .filter((n) => n.nodeType === 'outlier')
+        .sort((a, b) => (b as OutlierNode).mahalanobisDistance - (a as OutlierNode).mahalanobisDistance)
+        .slice(0, 2)
+        .map((n) => n.id)
+    )
+    data.nodes.forEach((n) => {
+      if (n.nodeType === 'paper') {
+        if (!layerToggles.papers) return
+        const p = n as PaperNode
+        if (p.clusterId) {
+          if (!expandedClusters.has(p.clusterId)) return
+          if (!topPaperIds.has(p.id)) return
+        }
+        // null clusterId = Go Deeper paper, always visible when papers are on
+      } else if (n.nodeType === 'direction') {
+        if (!layerToggles.directions) return
+      } else if (n.nodeType === 'outlier') {
+        if (!layerToggles.outliers) return
+        if (!top2OutlierIds.has(n.id)) return
+      } else if (n.nodeType === 'cluster') {
+        if (pruned.has(n.id) && !layerToggles.pruned) return
+      }
       ids.add(n.id)
     })
     return ids
-  }, [data.nodes, layerToggles, pruned])
+  }, [data.nodes, layerToggles, pruned, expandedClusters])
+
+  const visiblePaperCount = useMemo(
+    () => data.nodes.filter((n) => visibleNodeIds.has(n.id) && n.nodeType === 'paper').length,
+    [data.nodes, visibleNodeIds]
+  )
+
+  const totalPaperCount = useMemo(
+    () => data.nodes.filter((n) => n.nodeType === 'paper').length,
+    [data.nodes]
+  )
 
   useEffect(() => {
     if (!svgRef.current || !containerRef.current) return
@@ -76,11 +128,21 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
     const width = container.clientWidth || 900
     const height = container.clientHeight || 600
 
+    const canvasBg = isDark ? '#020817' : '#f8fafc'
+    const labelColor = isDark ? '#cbd5e1' : '#1e293b'
+    const mutedColor = isDark ? '#64748b' : '#94a3b8'
+    const edgeCitationColor = isDark ? '#475569' : '#94a3b8'
+    const paperFill = isDark ? '#475569' : '#94a3b8'
+    const paperStroke = isDark ? '#94a3b8' : '#475569'
+    const legendBg = isDark ? 'rgba(15,23,42,0.85)' : 'rgba(255,255,255,0.92)'
+    const legendBorder = isDark ? '#334155' : '#e2e8f0'
+    const legendText = isDark ? '#94a3b8' : '#475569'
+
     const svg = d3.select(svgRef.current)
     svg.selectAll('*').remove()
     svg.attr('width', width).attr('height', height)
+      .style('background', canvasBg)
 
-    // Defs: hatch pattern for pruned clusters
     const defs = svg.append('defs')
     defs.append('pattern')
       .attr('id', 'hatch')
@@ -88,7 +150,7 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
       .attr('width', 6).attr('height', 6)
       .append('path')
       .attr('d', 'M-1,1 l2,-2 M0,6 l6,-6 M5,7 l2,-2')
-      .attr('stroke', '#475569').attr('stroke-width', 1)
+      .attr('stroke', isDark ? '#475569' : '#cbd5e1').attr('stroke-width', 1)
 
     const g = svg.append('g').attr('class', 'graph-root')
 
@@ -98,10 +160,28 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
     svg.call(zoom)
     zoomRef.current = zoom
 
-    // Filter nodes and edges by visibility
     const nodes = data.nodes
       .filter((n) => visibleNodeIds.has(n.id))
       .map((n) => ({ ...n })) as GraphNode[]
+
+    // Position via UMAP coords — fallback to radial spread
+    const hasUmap = nodes.some((n) => n.umapX !== undefined && n.umapY !== undefined)
+    const pad = 100
+    const scaleX = d3.scaleLinear().domain([0, 1]).range([pad, width - pad])
+    const scaleY = d3.scaleLinear().domain([0, 1]).range([pad, height - pad])
+
+    nodes.forEach((n, i) => {
+      if (n.umapX !== undefined && n.umapY !== undefined) {
+        n.fx = scaleX(n.umapX)
+        n.fy = scaleY(n.umapY)
+      } else if (!hasUmap) {
+        // Radial fallback when no umap coords exist
+        const angle = (2 * Math.PI * i) / nodes.length
+        const r = Math.min(width, height) * 0.35
+        n.fx = width / 2 + r * Math.cos(angle)
+        n.fy = height / 2 + r * Math.sin(angle)
+      }
+    })
 
     const nodeSet = new Set(nodes.map((n) => n.id))
     const edges = data.edges
@@ -115,21 +195,13 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
       .map((e) => ({ ...e })) as GraphEdge[]
 
     const sim = d3.forceSimulation<GraphNode>(nodes)
-      .force('link', d3.forceLink<GraphNode, GraphEdge>(edges)
-        .id((d) => d.id)
-        .distance((e) => {
-          if (e.edgeType === 'generated_from') return 140
-          if (e.edgeType === 'semantic_similarity') return 90
-          return 70
-        })
-        .strength(0.4))
-      .force('charge', d3.forceManyBody().strength(-260))
-      .force('center', d3.forceCenter(width / 2, height / 2))
       .force('collision', d3.forceCollide<GraphNode>().radius((d) => {
-        if (d.nodeType === 'cluster') return 50
+        if (d.nodeType === 'cluster') return 60
         if (d.nodeType === 'direction') return 40
         return 22
       }))
+      .alphaDecay(0.05)
+
     simRef.current = sim
 
     // Edges
@@ -137,7 +209,7 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
     const edgeSel = edgeGroup.selectAll<SVGLineElement, GraphEdge>('line')
       .data(edges).enter().append('line')
       .attr('stroke', (e) => {
-        if (e.edgeType === 'citation') return '#475569'
+        if (e.edgeType === 'citation') return edgeCitationColor
         if (e.edgeType === 'semantic_similarity') return '#3b82f6'
         return '#f59e0b'
       })
@@ -147,56 +219,100 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
         if (e.edgeType === 'generated_from') return '2 4'
         return 'none'
       })
-      .attr('stroke-opacity', 0.45)
+      .attr('stroke-opacity', 0.25)
 
-    // Nodes group
+    // Nodes
     const nodeGroup = g.append('g').attr('class', 'nodes')
     const nodeSel = nodeGroup.selectAll<SVGGElement, GraphNode>('g')
       .data(nodes, (d) => d.id).enter().append('g')
+      .attr('class', 'node-group')
       .attr('cursor', 'pointer')
-      .call(
-        d3.drag<SVGGElement, GraphNode>()
-          .on('start', (event, d) => {
-            if (!event.active) sim.alphaTarget(0.3).restart()
-            d.fx = d.x; d.fy = d.y
-          })
-          .on('drag', (event, d) => { d.fx = event.x; d.fy = event.y })
-          .on('end', (event, d) => {
-            if (!event.active) sim.alphaTarget(0)
-            d.fx = null; d.fy = null
-          })
-      )
+      .call(d3.drag<SVGGElement, GraphNode>())  // no-op drag (positions locked)
       .on('click', (event, d) => {
         event.stopPropagation()
         onSelectNode(d.id, d.nodeType)
+        if (d.nodeType === 'cluster') toggleCluster(d.id)
       })
 
-    // Deselect on canvas click
     svg.on('click', () => onSelectNode(null, null))
 
-    // Render shapes per node type
+    // Render shapes
     nodeSel.each(function (d) {
       const el = d3.select(this)
       const isPruned = d.nodeType === 'cluster' && pruned.has(d.id)
 
       if (d.nodeType === 'cluster') {
         const c = d as ClusterNode
-        const color = FIELD_COLORS[c.field] ?? FIELD_COLORS.default
+        const color = '#3b82f6'
+        const quality = c.clusterQuality ?? 0.5
+        const isExpanded = expandedClusters.has(c.id)
+        const currentYear = new Date().getFullYear()
+        const isStale = typeof c.medianYear === 'number' && c.medianYear < currentYear - 3
+
+        // Confidence ring — dashed amber when median paper year is > 3 years old
+        el.append('circle')
+          .attr('r', 32)
+          .attr('fill', 'none')
+          .attr('stroke', isStale ? '#f59e0b' : color)
+          .attr('stroke-width', isExpanded ? 2.5 : 1.5)
+          .attr('stroke-opacity', isStale ? 0.75 : 0.15 + 0.85 * quality)
+          .attr('stroke-dasharray', isStale ? '4 2' : null)
+
         el.append('circle')
           .attr('r', 26)
           .attr('fill', isPruned ? 'url(#hatch)' : color + '33')
-          .attr('stroke', isPruned ? '#475569' : color)
+          .attr('stroke', isPruned ? (isDark ? '#475569' : '#cbd5e1') : color)
           .attr('stroke-width', 2)
           .attr('opacity', isPruned ? 0.4 : 1)
+
+        // Paper count inside circle
         el.append('text')
-          .text(c.label.length > 16 ? c.label.slice(0, 14) + '…' : c.label)
-          .attr('text-anchor', 'middle').attr('dy', 38)
-          .attr('fill', isPruned ? '#475569' : '#cbd5e1')
-          .attr('font-size', 10)
+          .text(String(c.paperCount))
+          .attr('text-anchor', 'middle').attr('dy', 5)
+          .attr('fill', isPruned ? mutedColor : color)
+          .attr('font-size', 13).attr('font-weight', 'bold')
+
+        // Cluster label ABOVE the node
+        const labelText = c.label.length > 30 ? c.label.slice(0, 28) + '…' : c.label
+        // Background rect for readability
+        el.append('rect')
+          .attr('x', -52).attr('y', -54)
+          .attr('width', 104).attr('height', 16)
+          .attr('rx', 3)
+          .attr('fill', isDark ? 'rgba(15,23,42,0.7)' : 'rgba(255,255,255,0.85)')
+
+        el.append('text')
+          .text(labelText)
+          .attr('text-anchor', 'middle').attr('dy', -42)
+          .attr('fill', isPruned ? mutedColor : labelColor)
+          .attr('font-size', 11).attr('font-weight', '600')
+
+        // Expand indicator
+        el.append('text')
+          .text(isExpanded ? '▾' : '▸')
+          .attr('text-anchor', 'middle').attr('dy', 40)
+          .attr('fill', color).attr('font-size', 9)
+          .attr('opacity', 0.6)
+
       } else if (d.nodeType === 'paper') {
         const p = d as PaperNode
         const r = Math.max(5, Math.min(14, Math.sqrt(p.citationCount / 300) + 4))
-        el.append('circle').attr('r', r).attr('fill', '#475569').attr('stroke', '#94a3b8').attr('stroke-width', 1)
+        el.append('circle').attr('r', r).attr('fill', paperFill).attr('stroke', paperStroke).attr('stroke-width', 1)
+
+        // Paper title above — only for representative papers to prevent overlap
+        if (p.isRepresentative) {
+          const shortTitle = p.title.length > 24 ? p.title.slice(0, 22) + '…' : p.title
+          el.append('rect')
+            .attr('x', -52).attr('y', -r - 16)
+            .attr('width', 104).attr('height', 13)
+            .attr('rx', 2)
+            .attr('fill', isDark ? 'rgba(15,23,42,0.6)' : 'rgba(255,255,255,0.8)')
+          el.append('text')
+            .text(shortTitle)
+            .attr('text-anchor', 'middle').attr('dy', -r - 5)
+            .attr('fill', labelColor).attr('font-size', 8)
+        }
+
       } else if (d.nodeType === 'direction') {
         const dd = d as DirectionNode
         const pts = hexagonPoints(0, 0, 18)
@@ -205,12 +321,20 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
           .attr('fill', dd.isFlagged ? '#f59e0b66' : '#f59e0b33')
           .attr('stroke', '#f59e0b')
           .attr('stroke-width', 2)
+
+        // Direction title above
+        const shortTitle = dd.title.length > 22 ? dd.title.slice(0, 20) + '…' : dd.title
+        el.append('rect')
+          .attr('x', -52).attr('y', -32)
+          .attr('width', 104).attr('height', 13)
+          .attr('rx', 2)
+          .attr('fill', isDark ? 'rgba(15,23,42,0.6)' : 'rgba(255,255,255,0.8)')
         el.append('text')
-          .text(dd.title.length > 18 ? dd.title.slice(0, 16) + '…' : dd.title)
-          .attr('text-anchor', 'middle').attr('dy', 30)
-          .attr('fill', '#fcd34d').attr('font-size', 9)
+          .text(shortTitle)
+          .attr('text-anchor', 'middle').attr('dy', -21)
+          .attr('fill', isDark ? '#fcd34d' : '#92400e').attr('font-size', 9).attr('font-weight', '600')
+
       } else if (d.nodeType === 'outlier') {
-        // Pulsing ring rendered below
         el.append('circle').attr('r', 7).attr('class', 'outlier-ring')
           .attr('fill', 'none').attr('stroke', '#f97316').attr('stroke-width', 1.5)
         el.append('circle').attr('r', 7).attr('fill', '#f9731633').attr('stroke', '#f97316').attr('stroke-width', 2)
@@ -219,17 +343,20 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
       // Selection ring
       el.append('circle')
         .attr('class', 'select-ring')
-        .attr('r', d.nodeType === 'cluster' ? 32 : d.nodeType === 'direction' ? 24 : 14)
+        .attr('r', d.nodeType === 'cluster' ? 36 : d.nodeType === 'direction' ? 24 : 14)
         .attr('fill', 'none')
-        .attr('stroke', '#e2e8f0')
+        .attr('stroke', isDark ? '#e2e8f0' : '#1e293b')
         .attr('stroke-width', 2)
         .attr('opacity', 0)
     })
 
-    // Tooltip title
     nodeSel.append('title').text((d) => {
       if (d.nodeType === 'paper') return `${(d as PaperNode).title} (${(d as PaperNode).year})`
-      if (d.nodeType === 'cluster') return (d as ClusterNode).label
+      if (d.nodeType === 'cluster') {
+        const c = d as ClusterNode
+        const q = c.clusterQuality !== undefined ? ` · quality ${(c.clusterQuality * 100).toFixed(0)}%` : ''
+        return `${c.label}${q} — click to expand`
+      }
       if (d.nodeType === 'direction') return (d as DirectionNode).title
       if (d.nodeType === 'outlier') return (d as OutlierNode).title
       return ''
@@ -241,15 +368,44 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
         .attr('y1', (e) => ((e.source as unknown) as GraphNode).y ?? 0)
         .attr('x2', (e) => ((e.target as unknown) as GraphNode).x ?? 0)
         .attr('y2', (e) => ((e.target as unknown) as GraphNode).y ?? 0)
-
       nodeSel.attr('transform', (d) => `translate(${d.x ?? 0},${d.y ?? 0})`)
+    })
+
+    // Legend
+    const legend = svg.append('g')
+      .attr('transform', `translate(16, ${height - 100})`)
+
+    const legendItems = [
+      { shape: 'circle', r: 10, fill: '#3b82f633', stroke: '#3b82f6', label: 'Cluster (click to expand)' },
+      { shape: 'circle', r: 5, fill: paperFill, stroke: paperStroke, label: 'Paper' },
+      { shape: 'hex', fill: '#f59e0b33', stroke: '#f59e0b', label: 'Direction' },
+      { shape: 'circle', r: 5, fill: '#f9731633', stroke: '#f97316', label: 'Outlier' },
+    ]
+
+    const legendBgRect = legend.append('rect')
+      .attr('x', -8).attr('y', -10)
+      .attr('width', 172).attr('height', legendItems.length * 20 + 12)
+      .attr('rx', 8)
+      .attr('fill', legendBg)
+      .attr('stroke', legendBorder)
+      .attr('stroke-width', 1)
+    void legendBgRect
+
+    legendItems.forEach((item, i) => {
+      const row = legend.append('g').attr('transform', `translate(10, ${i * 20})`)
+      if (item.shape === 'circle') {
+        row.append('circle').attr('r', item.r ?? 5).attr('fill', item.fill).attr('stroke', item.stroke).attr('stroke-width', 1.5)
+      } else {
+        row.append('polygon').attr('points', hexagonPoints(0, 0, 8)).attr('fill', item.fill).attr('stroke', item.stroke).attr('stroke-width', 1.5)
+      }
+      row.append('text').text(item.label).attr('x', 16).attr('dy', 4)
+        .attr('fill', legendText).attr('font-size', 10)
     })
 
     return () => { sim.stop() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, layerToggles, pruned, visibleNodeIds])
+  }, [data, layerToggles, pruned, visibleNodeIds, expandedClusters, isDark])
 
-  // Update selection rings without re-running sim
   useEffect(() => {
     if (!svgRef.current) return
     d3.select(svgRef.current)
@@ -257,16 +413,42 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
       .attr('opacity', (d) => (d.id === selectedNodeId ? 1 : 0))
   }, [selectedNodeId])
 
+  // Focus mode + read-paper dim: lightweight — no simulation restart
+  useEffect(() => {
+    if (!svgRef.current) return
+    d3.select(svgRef.current)
+      .selectAll<SVGGElement, GraphNode>('.node-group')
+      .attr('opacity', (d) => {
+        let opacity = 1
+        if (focusedClusterId && d.nodeType !== 'direction') {
+          const clId = d.nodeType === 'cluster'
+            ? d.id
+            : (d as PaperNode).clusterId ?? (d as OutlierNode).nearestClusterId ?? ''
+          if (clId !== focusedClusterId) opacity = 0.15
+        }
+        if (d.nodeType === 'paper' && readPaperIds.has(d.id)) opacity *= 0.4
+        return opacity
+      })
+  }, [focusedClusterId, readPaperIds])
+
   return (
-    <div ref={containerRef} className="w-full h-full relative overflow-hidden bg-[#020817]">
+    <div
+      ref={containerRef}
+      className="w-full h-full relative overflow-hidden"
+      tabIndex={-1}
+      onKeyDown={(e) => { if (e.key === 'Escape' && focusedClusterId) setFocusedCluster(null) }}
+    >
       <svg ref={svgRef} className="w-full h-full" />
-      {/* Legend */}
-      <div className="absolute bottom-4 left-4 flex flex-col gap-1.5 text-xs text-slate-400 bg-slate-900/80 rounded-lg px-3 py-2 border border-slate-700">
-        <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-blue-500/30 border border-blue-500 inline-block" /> Cluster</div>
-        <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-slate-500 inline-block" /> Paper</div>
-        <div className="flex items-center gap-2"><span className="w-3 h-3 inline-block" style={{ background: '#f59e0b33', border: '2px solid #f59e0b', clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }} /> Direction</div>
-        <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-orange-500/30 border border-orange-500 inline-block" /> Outlier</div>
+
+      {/* Paper count overlay */}
+      <div className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+        bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700
+        text-slate-500 dark:text-slate-400 backdrop-blur-sm">
+        <span className="text-slate-800 dark:text-slate-200 font-semibold">{visiblePaperCount}</span>
+        <span>/ {totalPaperCount} papers visible</span>
       </div>
+
+      {/* Node type legend (light-mode-aware, in SVG already — this is just fallback text) */}
     </div>
   )
 })
