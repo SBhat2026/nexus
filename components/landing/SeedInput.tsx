@@ -4,7 +4,7 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Search, FlaskConical, AlertCircle } from 'lucide-react'
 import type { GraphData } from '@/lib/types'
-import LoadingState from '@/components/explorer/LoadingState'
+import SessionProgress from '@/components/landing/SessionProgress'
 
 const EXAMPLES = [
   { label: 'Attention mechanisms in transformers', topic: 'attention mechanisms in transformers' },
@@ -16,13 +16,13 @@ export default function SeedInput() {
   const [value, setValue] = useState('')
   const [loading, setLoading] = useState(false)
   const [loadingTopic, setLoadingTopic] = useState('')
+  const [loadingSessionId, setLoadingSessionId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [typing, setTyping] = useState(false)
   const typingCancelRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const router = useRouter()
 
   function simulateTyping(topic: string) {
-    // Cancel any in-progress animation
     if (typingCancelRef.current) clearTimeout(typingCancelRef.current)
     setTyping(true)
     setValue('')
@@ -33,7 +33,6 @@ export default function SeedInput() {
         setValue(topic.slice(0, ++i))
         typingCancelRef.current = setTimeout(typeNext, 25)
       } else {
-        // Done typing — submit after 1.5 s unless user has already interacted
         typingCancelRef.current = setTimeout(() => {
           setTyping(false)
           submit(topic)
@@ -47,14 +46,17 @@ export default function SeedInput() {
     const trimmed = topic.trim()
     if (!trimmed || loading) return
     setError(null)
-    setLoading(true)
+
+    const sessionId = crypto.randomUUID()
     setLoadingTopic(trimmed)
+    setLoadingSessionId(sessionId)
+    setLoading(true)
 
     try {
       const res = await fetch('/api/session/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ seedTopic: trimmed }),
+        body: JSON.stringify({ seedTopic: trimmed, sessionId }),
       })
       const data = await res.json()
 
@@ -81,7 +83,21 @@ export default function SeedInput() {
     }
   }
 
-  if (loading) return <LoadingState topic={loadingTopic} />
+  function handleRetry() {
+    setLoading(false)
+    setLoadingSessionId('')
+    setError(null)
+  }
+
+  if (loading) {
+    return (
+      <SessionProgress
+        sessionId={loadingSessionId}
+        topic={loadingTopic}
+        onRetry={handleRetry}
+      />
+    )
+  }
 
   return (
     <div className="w-full max-w-2xl mx-auto">

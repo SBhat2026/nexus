@@ -10,6 +10,7 @@ import { projectEmbeddings } from '@/lib/umap/project'
 import { createServerClient } from '@/lib/supabase/server'
 import { labelClusters } from '@/lib/anthropic/labelClusters'
 import { labelClustersGroq } from '@/lib/groq/labelClusters'
+import { writeProgress } from '@/lib/progress/writer'
 
 export const maxDuration = 120
 
@@ -22,11 +23,22 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: 'seedTopic must be 2-1000 characters' }, { status: 400 })
     }
 
+    // Accept client-generated sessionId for progress polling, fallback to server-generated
+    const clientSessionId: string | undefined = body.sessionId
+    const sessionId =
+      clientSessionId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientSessionId)
+        ? clientSessionId
+        : randomUUID()
+
+    await writeProgress(sessionId, 'fetching', 'Searching OpenAlex…')
+
     // 1. Fetch 85 papers from OpenAlex — 70% from last 3 years, 30% unconstrained
     const works = await searchWorks(seedTopic, 85, { recentRatio: 0.7, recentYears: 3 })
     if (works.length === 0) {
       return Response.json({ error: 'No papers found for this topic', sessionId: null, graph: null }, { status: 200 })
     }
+
+    await writeProgress(sessionId, 'fetching', `Found ${works.length} papers`)
 
     const bareIds = works.map((w) => oaId(w.id))
 
@@ -53,6 +65,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Embeddings
+    await writeProgress(sessionId, 'embedding', `Embedding ${newWorks.length} new papers (${existingIds.size} cached)`)
     const papers = await getPapersWithEmbeddings(bareIds)
     const withEmbeddings = papers.filter((p) => p.embedding && p.embedding.length === 1024)
 
@@ -61,6 +74,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Cluster (PCA → UMAP 15D → DBSCAN) + UMAP 2D for visualization
+    await writeProgress(sessionId, 'clustering', 'Running PCA + UMAP + DBSCAN')
     const vectors = withEmbeddings.map((p) => p.embedding as number[])
     const pipeline = runClusteringPipeline(vectors)
     const umapCoords = projectEmbeddings(vectors)
@@ -79,6 +93,7 @@ export async function POST(req: NextRequest) {
         citationCount: p.citation_count,
         referenceIds: work?.referenced_works?.map(oaId) ?? [],
         s2Url: `https://openalex.org/${p.external_id}`,
+        venue: work?.primary_location?.source?.display_name ?? null,
       }
     })
 
@@ -121,7 +136,7 @@ export async function POST(req: NextRequest) {
     })
 
     // 6. Persist to Supabase
-    const sessionId = randomUUID()
+    await writeProgress(sessionId, 'saving', 'Persisting graph')
     await db.from('sessions').insert({ id: sessionId, seed_topic: seedTopic })
 
     const clusterUmapCentroids = new Map<number, [number, number]>()
@@ -175,6 +190,7 @@ export async function POST(req: NextRequest) {
     }
 
     // AI cluster labeling — fire after insert, update rows if successful
+    await writeProgress(sessionId, 'labeling', `Labeling ${pipeline.clusters.length} clusters`)
     const clusterInputs = pipeline.clusters.map((c) => ({
       clusterIndex: c.clusterIndex,
       papers: c.memberIndices
@@ -217,6 +233,7 @@ export async function POST(req: NextRequest) {
       is_representative: representativeIds.has(p.id),
       tldr: null,
       s2_url: p.s2Url,
+      venue: p.venue ?? null,
       umap_x: umapCoords[i]?.[0] ?? null,
       umap_y: umapCoords[i]?.[1] ?? null,
     }))
@@ -258,6 +275,8 @@ export async function POST(req: NextRequest) {
         target: e.target.startsWith('cluster-') ? `${sessionId}-${e.target}` : e.target,
       })),
     }
+
+    await writeProgress(sessionId, 'ready')
 
     return Response.json({
       sessionId,
