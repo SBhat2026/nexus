@@ -26,7 +26,7 @@ export async function POST(
     }
 
     // Fetch related works — 70% from last 3 years, 30% unconstrained
-    const relatedWorks = await fetchReferences(externalId, 30, { recentRatio: 0.7, recentYears: 3 })
+    const relatedWorks = await fetchReferences(externalId, 60, { recentRatio: 0.7, recentYears: 3 })
     const relatedIds = relatedWorks.map((w) => oaId(w.id))
 
     const db = createServerClient()

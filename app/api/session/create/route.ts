@@ -32,8 +32,8 @@ export async function POST(req: NextRequest) {
 
     await writeProgress(sessionId, 'fetching', 'Searching OpenAlex…')
 
-    // 1. Fetch 85 papers from OpenAlex — 70% from last 3 years, 30% unconstrained
-    const works = await searchWorks(seedTopic, 85, { recentRatio: 0.7, recentYears: 3 })
+    // 1. Fetch 150 papers from OpenAlex — 70% from last 3 years, 30% unconstrained
+    const works = await searchWorks(seedTopic, 150, { recentRatio: 0.7, recentYears: 3 })
     if (works.length === 0) {
       return Response.json({ error: 'No papers found for this topic', sessionId: null, graph: null }, { status: 200 })
     }
