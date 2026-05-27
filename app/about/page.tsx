@@ -47,13 +47,16 @@ const HOW_TO_USE: ReactNode = (
     <Step n="01" title="Enter a seed topic">
       Type any research topic — as broad as &ldquo;diffusion models&rdquo; or as specific as
       &ldquo;single-cell RNA velocity in neurogenesis&rdquo;. Specificity produces tighter clusters.
-      Nexus fetches up to 85 papers from OpenAlex, embeds them with Jina AI (1024-dim vectors),
-      then runs the full clustering pipeline.
+      Nexus fetches up to 85 papers from OpenAlex using a 70/30 recency split (70% from the last
+      3 years, 30% unconstrained), embeds them with Jina AI (1024-dim vectors), then runs the full
+      clustering pipeline.
     </Step>
     <Step n="02" title="Read the cluster map">
       Papers are grouped by semantic similarity into named clusters visible in both the graph and
       the left sidebar. Each cluster is AI-labeled with a short name and a brief description. Click
-      any cluster in the sidebar — or on the graph — to jump to it and expand its papers.
+      any cluster in the sidebar — or on the graph — to jump to it and expand its papers. Clusters
+      show a median publication year; an amber dashed ring indicates the cluster&apos;s work skews
+      older than 3 years.
     </Step>
     <Step n="03" title="Prune off-topic clusters">
       Select a cluster &rarr; &ldquo;Prune this cluster&rdquo; &rarr; add a reason. Pruned clusters
@@ -70,14 +73,32 @@ const HOW_TO_USE: ReactNode = (
       Select a cluster or outlier and hit &ldquo;Generate research directions&rdquo;. An AI model
       reads the cluster&apos;s papers, your pruning decisions, and the map structure to propose
       3&ndash;5 specific, actionable directions — each scored for novelty and feasibility (1&ndash;10).
+      Click &ldquo;Verify novelty&rdquo; on any direction to cross-check it against the existing
+      literature via OpenAlex.
     </Step>
     <Step n="06" title="Ask the research assistant">
       The floating chat bar at the bottom of the graph accepts free-form questions about your map:
       compare clusters, identify gaps, ask what to explore next. The assistant has full context —
-      all cluster labels, your selected node, pruned clusters, and generated directions. If it
-      suggests a refined topic, one click starts a new session.
+      all cluster labels, your selected node&apos;s complete metadata, pruned clusters, and generated
+      directions. Select a node before asking for the most grounded answers.
     </Step>
-    <Step n="07" title="Iterate and revisit">
+    <Step n="07" title="Filter by date range">
+      Open the left sidebar&apos;s date filter section, set a publication year range, and click
+      &ldquo;Apply &amp; re-cluster&rdquo;. Nexus re-clusters the already-fetched papers server-side
+      without making new API calls — typically 3&ndash;8 seconds. Use this to focus on recent work
+      or to compare how cluster structure changes across decades.
+    </Step>
+    <Step n="08" title="Focus on a cluster">
+      Select a cluster &rarr; &ldquo;Focus on this cluster&rdquo; in the right sidebar. All other
+      clusters and their papers dim to 15% opacity so you can study one area without distraction.
+      Press <strong>ESC</strong> or click &ldquo;Exit focus mode&rdquo; to clear. Focus state is
+      session-only and is not exported.
+    </Step>
+    <Step n="09" title="Mark papers as read">
+      Select a paper &rarr; &ldquo;Mark as read&rdquo; in the right sidebar. Read papers dim on the
+      graph so you can track what you&apos;ve processed. Cleared on page reload (session-only).
+    </Step>
+    <Step n="10" title="Iterate and revisit">
       Prune, go deeper, generate directions, ask follow-up questions. Your graph state — including
       all Go Deeper rounds and generated directions — is saved automatically and survives browser
       refresh within the same tab.
@@ -96,6 +117,14 @@ const AI_FEATURES: ReactNode = (
       On-demand when you click &ldquo;Generate research directions&rdquo;. By default uses Llama 3.3
       70B (free, via Groq). Add your own Claude key to upgrade to Claude Sonnet 4.6.
     </Kv>
+    <Kv term="Novelty verification">
+      Manual per-direction via &ldquo;Verify novelty&rdquo;. Searches OpenAlex for the closest
+      existing work and computes a literature coverage score: <strong>Low (&lt;30%)</strong> means
+      sparse prior art and higher novelty; <strong>High (&gt;70%)</strong> means the direction is
+      well-explored. Returns the 3 most relevant existing papers with citation counts and OpenAlex
+      links. The AI-assigned novelty score (1&ndash;10) is now labeled &ldquo;AI estimate&rdquo; to
+      distinguish it from the verified coverage label.
+    </Kv>
     <Kv term="Go Deeper clustering">
       When you expand a paper, the fetched references go through the same full pipeline (embedding
       &rarr; PCA &rarr; UMAP 15D &rarr; DBSCAN &rarr; AI labeling) as the initial session. New
@@ -104,8 +133,10 @@ const AI_FEATURES: ReactNode = (
     </Kv>
     <Kv term="Research assistant">
       The chat bar uses the same Llama 3.3 / Claude Sonnet switch as directions. Every message
-      carries your full graph context: all cluster names and descriptions, the currently selected
-      node, pruned clusters with reasons, and generated directions.
+      carries rich per-node context: for papers — title, year, authors, abstract, citation count;
+      for clusters — label, description, paper count, median year; for directions — rationale,
+      novelty and feasibility scores, suggested next steps; for outliers — Mahalanobis distance,
+      bridge potential, and outlier explanation. Select a node before asking for grounded answers.
     </Kv>
     <Kv term="When AI is paused">
       If the banner appears at the top of the explorer, cluster labeling, research directions, Go
@@ -154,8 +185,10 @@ const GRAPH_LEGEND: ReactNode = (
       {
         symbol: '●', color: 'text-blue-500 dark:text-blue-400', label: 'Cluster node',
         desc: <span>A group of semantically similar papers. AI-labeled. Size reflects paper count.
-          Clusters from Go Deeper rounds appear under their round number in the sidebar (Initial,
-          Round 2, Round 3&hellip;). Click to expand papers.</span>,
+          Shows median publication year of member papers. An amber dashed outer ring means the
+          cluster&apos;s median year is more than 3 years old — the work may predate recent
+          developments. Clusters from Go Deeper rounds appear under their round number in the
+          sidebar (Initial, Round 2, Round 3&hellip;). Click to expand papers.</span>,
       },
       {
         symbol: '●', color: 'text-slate-400 dark:text-slate-300', label: 'Paper node',
@@ -389,7 +422,7 @@ export default function AboutPage() {
               Source on GitHub
             </a>
           </p>
-          <p>Iterative cluster navigation, chat assistant, and session persistence live.</p>
+          <p>Recency-biased fetch, focus mode, read tracking, novelty verification, and date re-cluster live.</p>
         </div>
 
       </main>

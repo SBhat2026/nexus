@@ -103,14 +103,14 @@ export default function SeedInput() {
               if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(value) }
             }}
             placeholder="What do you want to learn about?"
-            className="w-full pl-14 pr-5 py-4 rounded-2xl bg-white border-2 border-slate-200 text-slate-900 placeholder-slate-400 text-base outline-none focus:border-blue-500 transition shadow-sm resize-none leading-relaxed"
+            className="w-full pl-14 pr-5 py-4 rounded-3xl bg-white border-2 border-slate-200 text-slate-900 placeholder-slate-400 text-base outline-none focus:border-blue-500 transition shadow-sm resize-none leading-relaxed"
             autoFocus
           />
         </div>
         <button
           type="submit"
           disabled={!value.trim() || loading}
-          className="px-7 self-stretch rounded-2xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-base transition shadow-sm flex items-center gap-2"
+          className="px-7 self-stretch rounded-3xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-base transition shadow-sm flex items-center gap-2"
         >
           <FlaskConical className="w-5 h-5" />
           Explore
