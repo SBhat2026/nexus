@@ -81,16 +81,22 @@ export async function searchWorks(query: string, limit = 25, opts?: RecencyOpts)
 
 export async function fetchWorksByIds(ids: string[]): Promise<OAWork[]> {
   if (ids.length === 0) return []
-  // OpenAlex filter by pipe-separated IDs
-  const filter = `ids.openalex:${ids.join('|')}`
-  const url =
-    `${BASE}/works?filter=${encodeURIComponent(filter)}` +
-    `&per-page=${Math.min(ids.length, 200)}` +
-    `&select=${WORK_FIELDS}` +
-    `&mailto=${MAILTO}`
-  const res = await oaFetch(url)
-  const data: OASearchResponse = await res.json()
-  return data.results ?? []
+  // Batch into chunks of 50 to keep URL lengths under OpenAlex's limit
+  const CHUNK = 50
+  const chunks: string[][] = []
+  for (let i = 0; i < ids.length; i += CHUNK) chunks.push(ids.slice(i, i + CHUNK))
+  const results = await Promise.all(chunks.map(async (chunk) => {
+    const filter = `ids.openalex:${chunk.join('|')}`
+    const url =
+      `${BASE}/works?filter=${encodeURIComponent(filter)}` +
+      `&per-page=${chunk.length}` +
+      `&select=${WORK_FIELDS}` +
+      `&mailto=${MAILTO}`
+    const res = await oaFetch(url)
+    const data: OASearchResponse = await res.json()
+    return data.results ?? []
+  }))
+  return results.flat()
 }
 
 /** Fetch referenced works (up to limit) for a given OpenAlex bare ID like "W123". */
