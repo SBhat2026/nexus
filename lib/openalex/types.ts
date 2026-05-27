@@ -11,6 +11,7 @@ export interface OAWork {
   publication_year: number | null
   cited_by_count: number
   referenced_works: string[]                        // OpenAlex full URLs
+  primary_location?: { source?: { display_name?: string | null } | null } | null
 }
 
 export interface OASearchResponse {

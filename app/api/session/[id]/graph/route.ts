@@ -23,13 +23,15 @@ export async function GET(
       return Response.json({ error: 'Session not found' }, { status: 404 })
     }
 
-    // Build pruned and flagged sets from human actions
+    // Build pruned, flagged, and read sets from human actions
     const prunedClusters = new Set<string>()
     const flaggedNodes = new Set<string>()
+    const readPaperIds: string[] = []
     const pruneReasons = new Map<string, string>()
     ;(actionsRes.data ?? []).forEach((a) => {
       if (a.action_type === 'prune') { prunedClusters.add(a.target_id); pruneReasons.set(a.target_id, a.note ?? '') }
       if (a.action_type === 'flag') flaggedNodes.add(a.target_id)
+      if (a.action_type === 'read') readPaperIds.push(a.target_id)
     })
 
     const nodes: GraphData['nodes'] = []
@@ -88,6 +90,7 @@ export async function GET(
           isRepresentative: p.is_representative ?? false,
           tldr: p.tldr ?? undefined,
           s2Url: p.s2_url ?? undefined,
+          venue: p.venue ?? null,
           umapX: p.umap_x ?? undefined,
           umapY: p.umap_y ?? undefined,
         }
@@ -103,7 +106,7 @@ export async function GET(
       weight: e.weight,
     }))
 
-    return Response.json({ sessionId, seedTopic: sessionRes.data.seed_topic, graph: { nodes, edges } })
+    return Response.json({ sessionId, seedTopic: sessionRes.data.seed_topic, graph: { nodes, edges }, readPaperIds })
   } catch (err) {
     console.error('[session/graph]', err)
     return Response.json({ error: 'Internal error' }, { status: 500 })

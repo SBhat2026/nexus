@@ -1,9 +1,21 @@
 'use client'
 
-import { useEffect, useRef, useImperativeHandle, forwardRef, useMemo } from 'react'
+import { useEffect, useRef, useImperativeHandle, forwardRef, useMemo, useState } from 'react'
 import * as d3 from 'd3'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { GraphData, GraphNode, GraphEdge, ClusterNode, PaperNode, DirectionNode, OutlierNode, LayerToggles } from '@/lib/types'
+
+interface TooltipState {
+  x: number
+  y: number
+  paper: {
+    title: string
+    authors: string[]
+    year: number
+    venue?: string | null
+    citationCount: number
+  }
+}
 
 const FIELD_COLORS: Record<string, string> = {
   machine_learning: '#3b82f6',
@@ -46,7 +58,10 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
   const containerRef = useRef<HTMLDivElement>(null)
   const simRef = useRef<d3.Simulation<GraphNode, GraphEdge> | null>(null)
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null)
-  const { expandedClusters, toggleCluster, focusedClusterId, setFocusedCluster, readPaperIds } = useSessionStore()
+  const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isDraggingRef = useRef(false)
+  const [tooltip, setTooltip] = useState<TooltipState | null>(null)
+  const { expandedClusters, toggleCluster, focusedClusterId, setFocusedCluster, readPaperIds, paperFilters, hideRead } = useSessionStore()
 
   useImperativeHandle(ref, () => ({
     focusNode(id: string) {
@@ -227,7 +242,15 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
       .data(nodes, (d) => d.id).enter().append('g')
       .attr('class', 'node-group')
       .attr('cursor', 'pointer')
-      .call(d3.drag<SVGGElement, GraphNode>())  // no-op drag (positions locked)
+      .call(
+        d3.drag<SVGGElement, GraphNode>()
+          .on('start', () => {
+            isDraggingRef.current = true
+            if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current)
+            setTooltip(null)
+          })
+          .on('end', () => { isDraggingRef.current = false })
+      )
       .on('click', (event, d) => {
         event.stopPropagation()
         onSelectNode(d.id, d.nodeType)
@@ -348,6 +371,38 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
         .attr('stroke', isDark ? '#e2e8f0' : '#1e293b')
         .attr('stroke-width', 2)
         .attr('opacity', 0)
+
+      // Hover tooltip — paper and outlier nodes only
+      if (d.nodeType === 'paper' || d.nodeType === 'outlier') {
+        const p = d as PaperNode
+        el
+          .on('mouseenter', function (event: MouseEvent) {
+            if (isDraggingRef.current) return
+            const container = containerRef.current
+            if (!container) return
+            const rect = container.getBoundingClientRect()
+            if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current)
+            const ex = event.clientX - rect.left
+            const ey = event.clientY - rect.top
+            tooltipTimerRef.current = setTimeout(() => {
+              setTooltip({
+                x: ex,
+                y: ey,
+                paper: {
+                  title: p.title,
+                  authors: p.authors,
+                  year: p.year,
+                  venue: p.venue,
+                  citationCount: p.citationCount,
+                },
+              })
+            }, 300)
+          })
+          .on('mouseleave', () => {
+            if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current)
+            setTooltip(null)
+          })
+      }
     })
 
     nodeSel.append('title').text((d) => {
@@ -402,7 +457,11 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
         .attr('fill', legendText).attr('font-size', 10)
     })
 
-    return () => { sim.stop() }
+    return () => {
+      sim.stop()
+      if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current)
+      setTooltip(null)
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, layerToggles, pruned, visibleNodeIds, expandedClusters, isDark])
 
@@ -413,23 +472,43 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
       .attr('opacity', (d) => (d.id === selectedNodeId ? 1 : 0))
   }, [selectedNodeId])
 
-  // Focus mode + read-paper dim: lightweight — no simulation restart
+  // Focus mode + read-paper dim + paper filters: lightweight — no simulation restart
   useEffect(() => {
     if (!svgRef.current) return
     d3.select(svgRef.current)
       .selectAll<SVGGElement, GraphNode>('.node-group')
       .attr('opacity', (d) => {
         let opacity = 1
+
+        // Focus mode
         if (focusedClusterId && d.nodeType !== 'direction') {
           const clId = d.nodeType === 'cluster'
             ? d.id
             : (d as PaperNode).clusterId ?? (d as OutlierNode).nearestClusterId ?? ''
           if (clId !== focusedClusterId) opacity = 0.15
         }
+
+        // Read paper dimming
         if (d.nodeType === 'paper' && readPaperIds.has(d.id)) opacity *= 0.4
+
+        // Paper filters (paper and outlier nodes)
+        if (d.nodeType === 'paper' || d.nodeType === 'outlier') {
+          const p = d as PaperNode
+          const { authors, venues, yearMin, yearMax } = paperFilters
+          const filteredByAuthor = authors.size > 0 && !p.authors.some((a) => authors.has(a))
+          const filteredByVenue = venues.size > 0 && !venues.has((p.venue ?? '(no venue)'))
+          const filteredByYear =
+            (yearMin !== null && p.year < yearMin) ||
+            (yearMax !== null && p.year > yearMax)
+          const filteredByRead = hideRead && readPaperIds.has(d.id)
+          if (filteredByAuthor || filteredByVenue || filteredByYear || filteredByRead) {
+            opacity = Math.min(opacity, 0.1)
+          }
+        }
+
         return opacity
       })
-  }, [focusedClusterId, readPaperIds])
+  }, [focusedClusterId, readPaperIds, paperFilters, hideRead])
 
   return (
     <div
@@ -439,6 +518,31 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
       onKeyDown={(e) => { if (e.key === 'Escape' && focusedClusterId) setFocusedCluster(null) }}
     >
       <svg ref={svgRef} className="w-full h-full" />
+
+      {/* Hover tooltip */}
+      {tooltip && (
+        <div
+          className="absolute z-20 pointer-events-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg px-3 py-2 max-w-[240px]"
+          style={{
+            left: tooltip.x + 248 > (containerRef.current?.clientWidth ?? 9999)
+              ? tooltip.x - 256
+              : tooltip.x + 14,
+            top: Math.max(8, tooltip.y - 12),
+          }}
+        >
+          <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 leading-snug line-clamp-2 mb-1">
+            {tooltip.paper.title}
+          </p>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-snug">
+            {tooltip.paper.authors.slice(0, 3).join(', ')}{tooltip.paper.authors.length > 3 ? ' et al.' : ''}
+          </p>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+            {tooltip.paper.year}
+            {tooltip.paper.venue ? ` · ${tooltip.paper.venue.length > 20 ? tooltip.paper.venue.slice(0, 18) + '…' : tooltip.paper.venue}` : ''}
+            {' · '}{tooltip.paper.citationCount.toLocaleString()} cites
+          </p>
+        </div>
+      )}
 
       {/* Paper count overlay */}
       <div className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium

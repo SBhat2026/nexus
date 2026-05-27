@@ -140,11 +140,15 @@ export async function POST(
       })
     })
 
+    // Venue from the relatedWorks map (best effort — null if missing)
+    const oaIdToWork = new Map(relatedWorks.map((w) => [oaId(w.id), w]))
+
     // Insert paper rows and build PaperNode objects
     const paperRows = withEmbeddings.map((p, i) => {
       const clusterIdx = pipeline.assignments[i]
       const clusterId = clusterIdx >= 0 ? `${clusterPrefix}-${clusterIdx}` : null
       const [umapX, umapY] = umapCoords[i] ?? [null, null]
+      const work = oaIdToWork.get(p.external_id)
       return {
         id: randomUUID(),
         session_id: sessionId,
@@ -159,6 +163,7 @@ export async function POST(
         is_outlier: pipeline.outlierFlags[i],
         tldr: null,
         s2_url: `https://openalex.org/${p.external_id}`,
+        venue: work?.primary_location?.source?.display_name ?? null,
         umap_x: umapX as number | null,
         umap_y: umapY as number | null,
       }
@@ -178,6 +183,7 @@ export async function POST(
         clusterId: r.cluster_id,
         isOutlier: r.is_outlier,
         s2Url: r.s2_url,
+        venue: r.venue ?? null,
         umapX: r.umap_x ?? undefined,
         umapY: r.umap_y ?? undefined,
       } as PaperNode)

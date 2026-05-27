@@ -18,6 +18,7 @@ interface RawPaper {
   tldr?: string
   s2Url?: string
   referenceIds?: string[]
+  venue?: string | null
 }
 
 const FIELD_PALETTE = [
@@ -120,6 +121,7 @@ export function buildGraph(
         isRepresentative: representativeIds?.has(paper.id) ?? false,
         tldr: paper.tldr,
         s2Url: paper.s2Url ?? `https://openalex.org/${paper.s2PaperId}`,
+        venue: paper.venue ?? null,
         umapX: paperUmap?.[0],
         umapY: paperUmap?.[1],
       }

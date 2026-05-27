@@ -27,6 +27,7 @@ export interface PaperNode extends BaseNode {
   tldr?: string
   pdfUrl?: string
   s2Url?: string
+  venue?: string | null
 }
 
 export interface ClusterNode extends BaseNode {
@@ -69,6 +70,7 @@ export interface OutlierNode extends BaseNode {
   outlierExplanation?: string
   bridgePotential?: string
   isFlagged: boolean
+  venue?: string | null
 }
 
 export type GraphNode = PaperNode | ClusterNode | DirectionNode | OutlierNode

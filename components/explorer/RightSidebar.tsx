@@ -1,7 +1,7 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, Star, Flag, Scissors, ExternalLink, BookOpen, Zap, Loader2, Focus, BookMarked } from 'lucide-react'
+import { X, Star, Flag, Scissors, ExternalLink, BookOpen, Zap, Loader2, Focus, BookMarked, Building2 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { GraphNode, PaperNode, ClusterNode, DirectionNode, OutlierNode, GraphEdge } from '@/lib/types'
@@ -18,6 +18,8 @@ interface Props {
   prunedClusters?: { id: string; label: string; reason: string }[]
   aiAvailable?: boolean
   allNodes?: GraphNode[]
+  onFindSimilar?: () => void
+  findingSimilar?: boolean
 }
 
 function StarRating({ value, onChange }: { value: number | null; onChange: (v: number) => void }) {
@@ -41,15 +43,52 @@ function ScorePill({ label, value, color }: { label: string; value: number; colo
   )
 }
 
-function PaperDetail({ node }: { node: PaperNode }) {
-  const { readPaperIds, toggleRead } = useSessionStore()
+function PaperDetail({
+  node,
+  onFindSimilar,
+  findingSimilar = false,
+}: {
+  node: PaperNode
+  onFindSimilar?: () => void
+  findingSimilar?: boolean
+}) {
+  const { readPaperIds, toggleRead, paperFilters, toggleAuthorFilter, toggleVenueFilter } = useSessionStore()
   const isRead = readPaperIds.has(node.id)
+  const [abstractOpen, setAbstractOpen] = useState(false)
 
   return (
     <div className="space-y-4">
       <div>
         <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 leading-snug">{node.title}</h3>
-        <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{node.authors.join(', ')} · {node.year}</div>
+        <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex flex-wrap gap-x-1">
+          {node.authors.map((a, i) => (
+            <span key={i}>
+              <button
+                onClick={() => toggleAuthorFilter(a)}
+                className={`hover:underline transition ${paperFilters.authors.has(a) ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400'}`}
+                title={paperFilters.authors.has(a) ? 'Click to remove author filter' : 'Click to filter by author'}
+              >
+                {a}
+              </button>
+              {i < node.authors.length - 1 && <span className="text-slate-300 dark:text-slate-600">,</span>}
+            </span>
+          ))}
+          <span className="text-slate-400 dark:text-slate-500">· {node.year}</span>
+        </div>
+        {node.venue && (
+          <button
+            onClick={() => toggleVenueFilter(node.venue!)}
+            className={`mt-0.5 flex items-center gap-1 text-xs transition ${
+              paperFilters.venues.has(node.venue)
+                ? 'text-blue-600 dark:text-blue-400 font-medium'
+                : 'text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400'
+            }`}
+            title={paperFilters.venues.has(node.venue) ? 'Click to remove venue filter' : 'Click to filter by venue'}
+          >
+            <Building2 className="w-3 h-3 shrink-0" />
+            {node.venue}
+          </button>
+        )}
       </div>
       <button
         onClick={() => toggleRead(node.id)}
@@ -67,7 +106,35 @@ function PaperDetail({ node }: { node: PaperNode }) {
           <span className="text-slate-400 dark:text-slate-500 font-medium">TLDR: </span>{node.tldr}
         </div>
       )}
-      <div className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-5">{node.abstract}</div>
+
+      {/* Action buttons */}
+      <div className="flex flex-wrap gap-2">
+        {node.abstract && (
+          <button
+            onClick={() => setAbstractOpen((v) => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+          >
+            <BookOpen className="w-3 h-3" />
+            {abstractOpen ? 'Hide abstract' : 'View abstract'}
+          </button>
+        )}
+        {onFindSimilar && (
+          <button
+            onClick={onFindSimilar}
+            disabled={findingSimilar}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 transition"
+          >
+            {findingSimilar
+              ? <><Loader2 className="w-3 h-3 animate-spin" /> Finding…</>
+              : <><Zap className="w-3 h-3" /> Find similar papers</>}
+          </button>
+        )}
+      </div>
+
+      {abstractOpen && node.abstract && (
+        <div className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{node.abstract}</div>
+      )}
+
       <div className="flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500">
         <BookOpen className="w-3.5 h-3.5" />
         <span>{node.citationCount.toLocaleString()} citations</span>
@@ -469,7 +536,7 @@ function OutlierDetail({
   )
 }
 
-export default function RightSidebar({ node, onClose, onPrune, onUnprune, onFlag, onDirectionsGenerated, onAiUnavailable, sessionId, prunedClusters = [], aiAvailable = true, allNodes }: Props) {
+export default function RightSidebar({ node, onClose, onPrune, onUnprune, onFlag, onDirectionsGenerated, onAiUnavailable, sessionId, prunedClusters = [], aiAvailable = true, allNodes, onFindSimilar, findingSimilar = false }: Props) {
   const [hasByokKey, setHasByokKey] = useState(false)
 
   useEffect(() => {
@@ -501,7 +568,7 @@ export default function RightSidebar({ node, onClose, onPrune, onUnprune, onFlag
             </button>
           </div>
           <div className="p-4 flex-1">
-            {node.nodeType === 'paper' && <PaperDetail node={node as PaperNode} />}
+            {node.nodeType === 'paper' && <PaperDetail node={node as PaperNode} onFindSimilar={onFindSimilar} findingSimilar={findingSimilar} />}
             {node.nodeType === 'cluster' && <ClusterDetail node={node as ClusterNode} onPrune={onPrune} onUnprune={onUnprune} onDirectionsGenerated={onDirectionsGenerated} onAiUnavailable={onAiUnavailable} sessionId={sessionId} prunedClusters={prunedClusters} aiAvailable={aiAvailable} hasByokKey={hasByokKey} allNodes={allNodes} />}
             {node.nodeType === 'direction' && <DirectionDetail node={node as DirectionNode} onFlag={onFlag} />}
             {node.nodeType === 'outlier' && <OutlierDetail node={node as OutlierNode} onFlag={onFlag} onDirectionsGenerated={onDirectionsGenerated} onAiUnavailable={onAiUnavailable} sessionId={sessionId} aiAvailable={aiAvailable} hasByokKey={hasByokKey} />}
