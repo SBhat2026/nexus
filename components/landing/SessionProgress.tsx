@@ -13,12 +13,12 @@ interface ProgressState {
 }
 
 const STAGES = [
-  { key: 'fetching', label: 'Fetching papers' },
-  { key: 'embedding', label: 'Computing embeddings' },
-  { key: 'clustering', label: 'Clustering' },
-  { key: 'saving', label: 'Saving to database' },
-  { key: 'labeling', label: 'AI labeling' },
-  { key: 'ready', label: 'Ready' },
+  { key: 'fetching',   label: 'Fetching papers',       icon: '🔍' },
+  { key: 'embedding',  label: 'Computing embeddings',  icon: '🧮' },
+  { key: 'clustering', label: 'Clustering',            icon: '🗂' },
+  { key: 'saving',     label: 'Saving to database',    icon: '💾' },
+  { key: 'labeling',   label: 'AI labeling',           icon: '✨' },
+  { key: 'ready',      label: 'Ready',                 icon: '✓'  },
 ]
 
 interface Props {
@@ -46,7 +46,7 @@ export default function SessionProgress({ sessionId, topic, onRetry }: Props) {
           if (!stopped) setProgress(data)
         }
       } catch {
-        // ignore transient network errors — keep polling
+        // ignore transient errors — keep polling
       }
     }
 
@@ -71,18 +71,21 @@ export default function SessionProgress({ sessionId, topic, onRetry }: Props) {
   }, [sessionId])
 
   const isError = progress.stage === 'error'
+  const pct = Math.round((progress.stageIndex / progress.stageTotal) * 100)
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white dark:bg-[#020817] px-6 overflow-hidden">
       <LoadingGraph />
 
       <div className="relative z-10 flex flex-col items-center w-full max-w-sm">
-        <div className="flex items-center gap-3 mb-8">
+        {/* Logo */}
+        <div className="flex items-center gap-3 mb-6">
           <NexusLogo size={44} />
           <span className="text-xl font-semibold text-slate-800 dark:text-slate-100">Nexus</span>
         </div>
 
-        <p className="text-slate-400 dark:text-slate-500 text-sm italic mb-8 text-center">{topic}</p>
+        {/* Topic */}
+        <p className="text-slate-400 dark:text-slate-500 text-sm italic mb-8 text-center line-clamp-2">{topic}</p>
 
         {isError ? (
           <div className="w-full text-center">
@@ -95,44 +98,55 @@ export default function SessionProgress({ sessionId, topic, onRetry }: Props) {
             </button>
           </div>
         ) : (
-          <ol className="w-full space-y-3">
-            {STAGES.map((s, i) => {
-              const stepNum = i + 1
-              const isDone = progress.stageIndex >= stepNum && progress.stage !== 'pending'
-              const isRunning = progress.stageIndex === stepNum && !isDone
-              const isActive = progress.stage === s.key || (isRunning)
+          <>
+            {/* Linear progress bar */}
+            <div className="w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-full mb-6 overflow-hidden">
+              <div
+                className="h-full bg-blue-500 rounded-full transition-all duration-700 ease-out"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
 
-              return (
-                <li key={s.key} className="flex items-start gap-3">
-                  <span className="mt-0.5 w-5 shrink-0 text-center">
-                    {isDone ? (
-                      <span className="text-blue-500 text-sm">✓</span>
-                    ) : isActive ? (
-                      <span className="inline-block w-3 h-3 rounded-full bg-blue-500 animate-pulse mt-1" />
-                    ) : (
-                      <span className="inline-block w-3 h-3 rounded-full border border-slate-300 dark:border-slate-600 mt-1" />
-                    )}
-                  </span>
-                  <div>
-                    <span
-                      className={`text-sm ${
-                        isDone
-                          ? 'text-slate-400 dark:text-slate-500'
-                          : isActive
-                          ? 'text-slate-800 dark:text-slate-100 font-medium'
-                          : 'text-slate-300 dark:text-slate-600'
-                      }`}
-                    >
-                      {s.label}
+            {/* Stage list */}
+            <ol className="w-full space-y-2">
+              {STAGES.map((s, i) => {
+                const stepNum = i + 1
+                const isDone = progress.stageIndex > stepNum ||
+                  (progress.stageIndex === stepNum && progress.stage === 'ready')
+                const isActive = progress.stage === s.key
+
+                return (
+                  <li
+                    key={s.key}
+                    className={`flex items-start gap-3 transition-opacity duration-300 ${
+                      isDone ? 'opacity-40' : isActive ? 'opacity-100' : 'opacity-30'
+                    }`}
+                  >
+                    {/* Step indicator */}
+                    <span className="mt-0.5 w-6 h-6 shrink-0 flex items-center justify-center rounded-full text-[11px]
+                      border transition-all duration-300
+                      ${isDone
+                        ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400'
+                        : isActive
+                        ? 'bg-blue-600 border-blue-600 text-white'
+                        : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400'
+                      }">
+                      {isDone ? '✓' : isActive ? <span className="inline-block w-2 h-2 rounded-full bg-white animate-pulse" /> : stepNum}
                     </span>
-                    {isActive && progress.detail && (
-                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{progress.detail}</p>
-                    )}
-                  </div>
-                </li>
-              )
-            })}
-          </ol>
+
+                    <div className="flex-1 min-w-0 pt-0.5">
+                      <span className={`text-sm ${isActive ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>
+                        {s.label}
+                      </span>
+                      {isActive && progress.detail && (
+                        <p className="text-xs text-blue-500 dark:text-blue-400 mt-0.5 font-mono">{progress.detail}</p>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
+            </ol>
+          </>
         )}
       </div>
     </div>

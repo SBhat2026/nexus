@@ -17,6 +17,7 @@ interface Props {
   selectedNodeType?: string | null
   goingDeeper?: boolean
   reclustering?: boolean
+  width?: number
 }
 
 export default function LeftSidebar({
@@ -30,6 +31,7 @@ export default function LeftSidebar({
   selectedNodeType,
   goingDeeper = false,
   reclustering = false,
+  width,
 }: Props) {
   const {
     sessionName, setSessionName, seedTopic, isDark, toggleTheme,
@@ -49,6 +51,14 @@ export default function LeftSidebar({
   const [maxYear, setMaxYear] = useState(String(new Date().getFullYear()))
   const [keyInput, setKeyInput] = useState('')
   const [savedKey, setSavedKey] = useState('')
+  const [venueInput, setVenueInput] = useState('')
+
+  const POPULAR_VENUES = [
+    'Nature', 'Science', 'Cell', 'PNAS', 'eLife',
+    'NeurIPS', 'ICML', 'ICLR', 'CVPR', 'ECCV',
+    'ACL', 'EMNLP', 'NAACL', 'KDD', 'WWW',
+    'arXiv', 'PLOS ONE', 'Bioinformatics',
+  ]
 
   useEffect(() => {
     const k = sessionStorage.getItem('nexus_anthropic_key') ?? ''
@@ -147,7 +157,10 @@ export default function LeftSidebar({
   const canGoDeeper = selectedNodeType === 'paper' || selectedNodeType === 'outlier'
 
   return (
-    <aside className="h-full w-[260px] shrink-0 flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700/60 overflow-hidden">
+    <aside
+      className="h-full w-[260px] shrink-0 flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700/60 overflow-hidden"
+      style={{ width: width ?? 260 }}
+    >
       {/* Header */}
       <div className="p-3 border-b border-slate-200 dark:border-slate-700/60 flex items-center gap-2 shrink-0">
         <Link
@@ -326,26 +339,60 @@ export default function LeftSidebar({
               )}
 
               {/* Venues */}
-              {topVenues.length > 0 && (
-                <div>
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1.5">Venues</div>
-                  <div className="flex flex-wrap gap-1">
-                    {topVenues.map((v) => (
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1.5">Venues</div>
+                {/* Manual input */}
+                <div className="flex gap-1 mb-1.5">
+                  <input
+                    value={venueInput}
+                    onChange={(e) => setVenueInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && venueInput.trim()) {
+                        toggleVenueFilter(venueInput.trim())
+                        setVenueInput('')
+                      }
+                    }}
+                    placeholder="Type venue & press Enter…"
+                    className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-[10px] text-slate-700 dark:text-slate-300 outline-none focus:border-blue-400 placeholder-slate-300 dark:placeholder-slate-600"
+                  />
+                </div>
+                {/* Active venue filters */}
+                {paperFilters.venues.size > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-1.5">
+                    {Array.from(paperFilters.venues).map((v) => (
                       <button
                         key={v}
                         onClick={() => toggleVenueFilter(v)}
-                        className={`px-2 py-0.5 rounded-full text-[10px] border transition ${
-                          paperFilters.venues.has(v)
-                            ? 'bg-blue-100 dark:bg-blue-900/40 border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300'
-                            : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-600'
-                        }`}
+                        className="px-2 py-0.5 rounded-full text-[10px] border bg-blue-100 dark:bg-blue-900/40 border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300"
                       >
-                        {v.length > 14 ? v.slice(0, 12) + '…' : v}
+                        {v.length > 14 ? v.slice(0, 12) + '…' : v} ×
                       </button>
                     ))}
                   </div>
+                )}
+                {/* Popular suggestions */}
+                <div className="text-[9px] text-slate-400 dark:text-slate-600 mb-1">Popular:</div>
+                <div className="flex flex-wrap gap-1">
+                  {POPULAR_VENUES.filter((v) => !paperFilters.venues.has(v)).slice(0, 10).map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => toggleVenueFilter(v)}
+                      className="px-2 py-0.5 rounded-full text-[10px] border bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:border-blue-300 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400 transition"
+                    >
+                      {v}
+                    </button>
+                  ))}
+                  {topVenues.filter((v) => !POPULAR_VENUES.includes(v) && !paperFilters.venues.has(v)).slice(0, 4).map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => toggleVenueFilter(v)}
+                      className="px-2 py-0.5 rounded-full text-[10px] border bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:border-blue-300 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400 transition"
+                    >
+                      {v.length > 14 ? v.slice(0, 12) + '…' : v}
+                    </button>
+                  ))}
                 </div>
-              )}
+              </div>
 
               {/* Year range */}
               <div>
@@ -549,9 +596,12 @@ export default function LeftSidebar({
       <div className="p-3 border-t border-slate-200 dark:border-slate-700/60 shrink-0">
         <Link
           href="/about"
-          className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition"
+          className="flex items-center justify-between w-full group rounded-lg px-2 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
         >
-          <Info className="w-3.5 h-3.5" /> About &amp; How to use
+          <span className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 group-hover:text-slate-800 dark:group-hover:text-slate-200 transition font-medium">
+            <Info className="w-3.5 h-3.5" /> How to use Nexus
+          </span>
+          <span className="text-[10px] text-slate-300 dark:text-slate-600 group-hover:text-blue-400 transition">Guide →</span>
         </Link>
       </div>
     </aside>

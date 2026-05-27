@@ -359,20 +359,27 @@ export default function AboutPage() {
           </button>
         </div>
 
-        {/* Title */}
-        <div className="flex items-center gap-3 mb-5">
-          <NexusLogo size={36} />
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">About Nexus</h1>
+        {/* Hero */}
+        <div className="rounded-2xl bg-gradient-to-br from-blue-50 to-slate-50 dark:from-blue-950/30 dark:to-slate-900 border border-blue-100 dark:border-blue-900/40 px-6 py-7 mb-10">
+          <div className="flex items-center gap-3 mb-3">
+            <NexusLogo size={36} />
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">About Nexus</h1>
+          </div>
+          <p className="text-slate-600 dark:text-slate-400 leading-relaxed text-sm">
+            Nexus is an AI-powered research navigator — the Google Maps of academic literature. Enter
+            a topic and it builds a live semantic map: clustering papers by conceptual similarity,
+            AI-labeling each cluster, surfacing outlier papers that bridge fields, and generating
+            novel research directions. Drill deeper iteratively through multiple rounds of exploration,
+            ask a built-in research assistant questions about your map, and export everything as JSON.
+          </p>
+          <div className="flex flex-wrap gap-2 mt-4">
+            {['OpenAlex', 'Jina AI', 'UMAP · DBSCAN', 'Claude Sonnet', 'Llama 3.3'].map(t => (
+              <span key={t} className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-white/70 dark:bg-slate-800/70 border border-blue-200/60 dark:border-blue-800/40 text-blue-700 dark:text-blue-400">
+                {t}
+              </span>
+            ))}
+          </div>
         </div>
-
-        {/* Summary */}
-        <p className="text-slate-600 dark:text-slate-400 leading-relaxed mb-10">
-          Nexus is an AI-powered research navigator — the Google Maps of academic literature. Enter
-          a topic and it builds a live semantic map: clustering papers by conceptual similarity,
-          AI-labeling each cluster, surfacing outlier papers that bridge fields, and generating
-          novel research directions. Drill deeper iteratively through multiple rounds of exploration,
-          ask a built-in research assistant questions about your map, and export everything as JSON.
-        </p>
 
         {/* Quick-navigation chips */}
         <div className="mb-10">
@@ -410,19 +417,46 @@ export default function AboutPage() {
         </div>
 
         {/* Footer */}
-        <div className="border-t border-slate-200 dark:border-slate-700/50 pt-6 text-xs text-slate-400 dark:text-slate-600 space-y-1">
-          <p>
-            Nexus is an open research tool.{' '}
-            <a
-              href="https://github.com/SBhat2026/nexus"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-slate-600 dark:hover:text-slate-400 transition underline underline-offset-2"
-            >
-              Source on GitHub
-            </a>
+        <div className="border-t border-slate-200 dark:border-slate-700/50 pt-8">
+          <div className="grid grid-cols-2 gap-6 text-xs text-slate-500 dark:text-slate-400 mb-6">
+            <div>
+              <p className="font-semibold text-slate-700 dark:text-slate-300 mb-2">Resources</p>
+              <ul className="space-y-1.5">
+                <li>
+                  <a href="https://github.com/SBhat2026/nexus" target="_blank" rel="noopener noreferrer"
+                    className="hover:text-blue-600 dark:hover:text-blue-400 transition">
+                    Source code on GitHub ↗
+                  </a>
+                </li>
+                <li>
+                  <a href="https://openalex.org" target="_blank" rel="noopener noreferrer"
+                    className="hover:text-blue-600 dark:hover:text-blue-400 transition">
+                    OpenAlex (paper data) ↗
+                  </a>
+                </li>
+                <li>
+                  <a href="https://jina.ai" target="_blank" rel="noopener noreferrer"
+                    className="hover:text-blue-600 dark:hover:text-blue-400 transition">
+                    Jina AI (embeddings) ↗
+                  </a>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-semibold text-slate-700 dark:text-slate-300 mb-2">What&apos;s live</p>
+              <ul className="space-y-1.5 text-slate-400 dark:text-slate-500">
+                <li>Recency-biased paper fetch</li>
+                <li>Multi-round Go Deeper clustering</li>
+                <li>Novelty verification via OpenAlex</li>
+                <li>DB-backed read tracking</li>
+                <li>Date-range re-clustering</li>
+                <li>Focus mode, paper filters</li>
+              </ul>
+            </div>
+          </div>
+          <p className="text-xs text-slate-300 dark:text-slate-700 text-center">
+            Built with Next.js · D3 · Supabase · Anthropic Claude
           </p>
-          <p>Recency-biased fetch, focus mode, read tracking, novelty verification, and date re-cluster live.</p>
         </div>
 
       </main>

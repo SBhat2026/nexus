@@ -60,6 +60,8 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null)
   const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isDraggingRef = useRef(false)
+  // Tracks whether the enter-fade transition is still in progress (prevents focus-dim race)
+  const enterAnimatingRef = useRef(false)
   const [tooltip, setTooltip] = useState<TooltipState | null>(null)
   const { expandedClusters, toggleCluster, focusedClusterId, setFocusedCluster, readPaperIds, paperFilters, hideRead } = useSessionStore()
 
@@ -434,40 +436,16 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
       nodeSel.attr('transform', (d) => `translate(${d.x ?? 0},${d.y ?? 0})`)
     })
 
-    // Legend
-    const legend = svg.append('g')
-      .attr('transform', `translate(16, ${height - 100})`)
-      .attr('filter', 'drop-shadow(0 2px 6px rgba(0,0,0,0.14))')
+    // Legend is rendered as a React overlay — see JSX below
 
-    const legendItems = [
-      { shape: 'circle', r: 10, fill: '#3b82f633', stroke: '#3b82f6', label: 'Cluster (click to expand)' },
-      { shape: 'circle', r: 5, fill: paperFill, stroke: paperStroke, label: 'Paper' },
-      { shape: 'hex', fill: '#f59e0b33', stroke: '#f59e0b', label: 'Direction' },
-      { shape: 'circle', r: 5, fill: '#f9731633', stroke: '#f97316', label: 'Outlier' },
-    ]
-
-    const legendBgRect = legend.append('rect')
-      .attr('x', -8).attr('y', -10)
-      .attr('width', 172).attr('height', legendItems.length * 20 + 12)
-      .attr('rx', 8)
-      .attr('fill', legendBg)
-      .attr('stroke', legendBorder)
-      .attr('stroke-width', 1)
-    void legendBgRect
-
-    legendItems.forEach((item, i) => {
-      const row = legend.append('g').attr('transform', `translate(10, ${i * 20})`)
-      if (item.shape === 'circle') {
-        row.append('circle').attr('r', item.r ?? 5).attr('fill', item.fill).attr('stroke', item.stroke).attr('stroke-width', 1.5)
-      } else {
-        row.append('polygon').attr('points', hexagonPoints(0, 0, 8)).attr('fill', item.fill).attr('stroke', item.stroke).attr('stroke-width', 1.5)
-      }
-      row.append('text').text(item.label).attr('x', 16).attr('dy', 4)
-        .attr('fill', legendText).attr('font-size', 10)
-    })
+    // Signal that the enter animation is in flight so the focus effect delays correctly
+    enterAnimatingRef.current = true
+    const enterAnimTimer = setTimeout(() => { enterAnimatingRef.current = false }, 280)
 
     return () => {
       sim.stop()
+      clearTimeout(enterAnimTimer)
+      enterAnimatingRef.current = false
       if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current)
       setTooltip(null)
     }
@@ -482,42 +460,54 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
   }, [selectedNodeId])
 
   // Focus mode + read-paper dim + paper filters: lightweight — no simulation restart
+  // Includes visibleNodeIds in deps so it re-runs after graph data changes (e.g. directions added).
+  // Delays when the enter-fade animation is in flight to avoid being overridden.
   useEffect(() => {
     if (!svgRef.current) return
-    d3.select(svgRef.current)
-      .selectAll<SVGGElement, GraphNode>('.node-group')
-      .attr('opacity', (d) => {
-        let opacity = 1
 
-        // Focus mode
-        if (focusedClusterId && d.nodeType !== 'direction') {
-          const clId = d.nodeType === 'cluster'
-            ? d.id
-            : (d as PaperNode).clusterId ?? (d as OutlierNode).nearestClusterId ?? ''
-          if (clId !== focusedClusterId) opacity = 0.15
-        }
+    function applyOpacity() {
+      if (!svgRef.current) return
+      d3.select(svgRef.current)
+        .selectAll<SVGGElement, GraphNode>('.node-group')
+        .attr('opacity', (d) => {
+          let opacity = 1
 
-        // Read paper dimming
-        if (d.nodeType === 'paper' && readPaperIds.has(d.id)) opacity *= 0.4
-
-        // Paper filters (paper and outlier nodes)
-        if (d.nodeType === 'paper' || d.nodeType === 'outlier') {
-          const p = d as PaperNode
-          const { authors, venues, yearMin, yearMax } = paperFilters
-          const filteredByAuthor = authors.size > 0 && !p.authors.some((a) => authors.has(a))
-          const filteredByVenue = venues.size > 0 && !venues.has((p.venue ?? '(no venue)'))
-          const filteredByYear =
-            (yearMin !== null && p.year < yearMin) ||
-            (yearMax !== null && p.year > yearMax)
-          const filteredByRead = hideRead && readPaperIds.has(d.id)
-          if (filteredByAuthor || filteredByVenue || filteredByYear || filteredByRead) {
-            opacity = Math.min(opacity, 0.1)
+          // Focus mode
+          if (focusedClusterId && d.nodeType !== 'direction') {
+            const clId = d.nodeType === 'cluster'
+              ? d.id
+              : (d as PaperNode).clusterId ?? (d as OutlierNode).nearestClusterId ?? ''
+            if (clId !== focusedClusterId) opacity = 0.15
           }
-        }
 
-        return opacity
-      })
-  }, [focusedClusterId, readPaperIds, paperFilters, hideRead])
+          // Read paper dimming
+          if (d.nodeType === 'paper' && readPaperIds.has(d.id)) opacity *= 0.4
+
+          // Paper filters (paper and outlier nodes)
+          if (d.nodeType === 'paper' || d.nodeType === 'outlier') {
+            const p = d as PaperNode
+            const { authors, venues, yearMin, yearMax } = paperFilters
+            const filteredByAuthor = authors.size > 0 && !p.authors.some((a) => authors.has(a))
+            const filteredByVenue = venues.size > 0 && !venues.has((p.venue ?? '(no venue)'))
+            const filteredByYear =
+              (yearMin !== null && p.year < yearMin) ||
+              (yearMax !== null && p.year > yearMax)
+            const filteredByRead = hideRead && readPaperIds.has(d.id)
+            if (filteredByAuthor || filteredByVenue || filteredByYear || filteredByRead) {
+              opacity = Math.min(opacity, 0.1)
+            }
+          }
+
+          return opacity
+        })
+    }
+
+    if (enterAnimatingRef.current) {
+      const handle = setTimeout(applyOpacity, 280)
+      return () => clearTimeout(handle)
+    }
+    applyOpacity()
+  }, [focusedClusterId, readPaperIds, paperFilters, hideRead, visibleNodeIds])
 
   return (
     <div
@@ -563,7 +553,36 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
         <span> papers visible</span>
       </div>
 
-      {/* Node type legend (light-mode-aware, in SVG already — this is just fallback text) */}
+      {/* Legend overlay */}
+      <div className="absolute bottom-4 left-4 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg px-3 py-2.5 space-y-1.5 min-w-[168px]">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">Legend</p>
+        {[
+          {
+            icon: <svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7" fill="#3b82f633" stroke="#3b82f6" strokeWidth="2"/><text x="9" y="13" textAnchor="middle" fontSize="8" fill="#3b82f6" fontWeight="bold">n</text></svg>,
+            label: 'Cluster', sub: 'click to expand',
+          },
+          {
+            icon: <svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="5" fill="#94a3b8" stroke="#64748b" strokeWidth="1.5"/></svg>,
+            label: 'Paper', sub: 'size = citations',
+          },
+          {
+            icon: <svg width="18" height="18" viewBox="0 0 18 18"><polygon points="9,1 16.5,5 16.5,13 9,17 1.5,13 1.5,5" fill="#f59e0b33" stroke="#f59e0b" strokeWidth="1.5"/></svg>,
+            label: 'Direction', sub: 'AI-generated',
+          },
+          {
+            icon: <svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="6" fill="#f9731633" stroke="#f97316" strokeWidth="2"/><circle cx="9" cy="9" r="9" fill="none" stroke="#f97316" strokeWidth="1" strokeOpacity="0.4"/></svg>,
+            label: 'Outlier', sub: 'bridge paper',
+          },
+        ].map(({ icon, label, sub }) => (
+          <div key={label} className="flex items-center gap-2.5">
+            <div className="shrink-0 flex items-center justify-center w-[18px] h-[18px]">{icon}</div>
+            <div className="min-w-0">
+              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{label}</span>
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 ml-1">{sub}</span>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 })

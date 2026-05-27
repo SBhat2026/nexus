@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, use, useMemo } from 'react'
+import { useEffect, useRef, useState, use, useMemo, useCallback } from 'react'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { GraphData, GraphNode, NodeType, DirectionNode, GraphEdge } from '@/lib/types'
 import GraphCanvas, { GraphCanvasHandle } from '@/components/explorer/GraphCanvas'
@@ -35,6 +35,41 @@ export default function SessionPage({ params }: PageProps) {
   const [bannerDismissed, setBannerDismissed] = useState(false)
   const [goingDeeper, setGoingDeeper] = useState(false)
   const [reclustering, setReclustering] = useState(false)
+
+  const [leftWidth, setLeftWidth] = useState(260)
+  const [rightWidth, setRightWidth] = useState(340)
+
+  const startLeftResize = useCallback((e: React.PointerEvent) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startWidth = leftWidth
+    function onMove(ev: PointerEvent) {
+      const delta = ev.clientX - startX
+      setLeftWidth(Math.min(400, Math.max(180, startWidth + delta)))
+    }
+    function onUp() {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }, [leftWidth])
+
+  const startRightResize = useCallback((e: React.PointerEvent) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startWidth = rightWidth
+    function onMove(ev: PointerEvent) {
+      const delta = startX - ev.clientX
+      setRightWidth(Math.min(480, Math.max(240, startWidth + delta)))
+    }
+    function onUp() {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }, [rightWidth])
 
   const canvasRef = useRef<GraphCanvasHandle>(null)
 
@@ -275,8 +310,14 @@ export default function SessionPage({ params }: PageProps) {
           selectedNodeType={selectedNode?.nodeType ?? null}
           goingDeeper={goingDeeper}
           reclustering={reclustering}
+          width={leftWidth}
         />
-        <div className="flex-1 relative overflow-hidden">
+        <div className="flex-1 relative overflow-hidden flex">
+          {/* left resize handle */}
+          <div
+            className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400/30 z-10 transition-colors"
+            onPointerDown={startLeftResize}
+          />
           <GraphCanvas
             ref={canvasRef}
             data={graphData!}
@@ -296,9 +337,14 @@ export default function SessionPage({ params }: PageProps) {
               </button>
             </div>
           )}
+          {/* right resize handle */}
+          <div
+            className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400/30 z-10 transition-colors"
+            onPointerDown={startRightResize}
+          />
         </div>
-        <div style={{ width: selectedNode ? 340 : 0, transition: 'width 0.25s', overflow: 'hidden', flexShrink: 0 }}>
-          <div style={{ width: 340 }} className="h-full">
+        <div style={{ width: selectedNode ? rightWidth : 0, transition: 'width 0.25s', overflow: 'hidden', flexShrink: 0 }}>
+          <div style={{ width: rightWidth }} className="h-full">
             <RightSidebar
               node={selectedNode}
               onClose={() => handleSelectNode(null, null)}
