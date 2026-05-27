@@ -2,6 +2,7 @@ import type { OAWork, OASearchResponse } from './types'
 import { OAError, oaId } from './types'
 
 const BASE = 'https://api.openalex.org'
+const PER_PAGE_MAX = 100  // OpenAlex practical per-request limit
 
 // Using polite pool — add email so OpenAlex gives us faster, dedicated servers
 const MAILTO = 'siddhantbhat3@gmail.com'
@@ -52,14 +53,14 @@ export async function searchWorks(query: string, limit = 25, opts?: RecencyOpts)
     const url =
       `${BASE}/works?search=${encodeURIComponent(query)}` +
       `&filter=${baseFilter}` +
-      `&per-page=${limit}&select=${WORK_FIELDS}&mailto=${MAILTO}`
+      `&per-page=${Math.min(limit, PER_PAGE_MAX)}&select=${WORK_FIELDS}&mailto=${MAILTO}`
     const res = await oaFetch(url)
     const data: OASearchResponse = await res.json()
     return data.results ?? []
   }
 
-  const recentLimit = Math.round(limit * ratio)
-  const oldLimit = limit - recentLimit
+  const recentLimit = Math.min(Math.round(limit * ratio), PER_PAGE_MAX)
+  const oldLimit = Math.min(limit - recentLimit, PER_PAGE_MAX)
   const fromDate = `${currentYear - years}-01-01`
 
   const [rRes, oRes] = await Promise.all([
@@ -103,14 +104,14 @@ export async function fetchReferences(bareId: string, limit = 20, opts?: Recency
   if (ratio <= 0 || ratio >= 1) {
     const url =
       `${BASE}/works?filter=${baseFilter}` +
-      `&per-page=${limit}&select=${WORK_FIELDS}&sort=cited_by_count:desc&mailto=${MAILTO}`
+      `&per-page=${Math.min(limit, PER_PAGE_MAX)}&select=${WORK_FIELDS}&sort=cited_by_count:desc&mailto=${MAILTO}`
     const res = await oaFetch(url)
     const data: OASearchResponse = await res.json()
     return data.results ?? []
   }
 
-  const recentLimit = Math.round(limit * ratio)
-  const oldLimit = limit - recentLimit
+  const recentLimit = Math.min(Math.round(limit * ratio), PER_PAGE_MAX)
+  const oldLimit = Math.min(limit - recentLimit, PER_PAGE_MAX)
   const fromDate = `${currentYear - years}-01-01`
 
   const [rRes, oRes] = await Promise.all([
