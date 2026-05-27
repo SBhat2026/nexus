@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
+@variant dark (&:where(.dark, .dark *));
+
 @theme inline {
-  --color-background: #020817;
-  --color-foreground: #f1f5f9;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 body {
-  background: var(--color-background);
-  color: var(--color-foreground);
+  background: #ffffff;
+  color: #0f172a;
   font-family: var(--font-sans), Arial, sans-serif;
 }
 
