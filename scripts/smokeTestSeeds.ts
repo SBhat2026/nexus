@@ -4,7 +4,7 @@
  *
  * Usage:
  *   npx tsx scripts/smokeTestSeeds.ts
- *   BASE_URL=https://nexus-seven-neon.vercel.app npx tsx scripts/smokeTestSeeds.ts
+ *   BASE_URL=https://nexusresearch.xyz npx tsx scripts/smokeTestSeeds.ts
  */
 
 import { SEED_TOPIC_STRINGS } from '../lib/testSeeds'
