@@ -19,7 +19,7 @@ type LoadStatus = 'loading' | 'ready' | 'error'
 
 export default function SessionPage({ params }: PageProps) {
   const { id } = use(params)
-  const { setSession, selectNode, selectedNodeId, layerToggles, isDark, focusedClusterId, setFocusedCluster } = useSessionStore()
+  const { setSession, selectNode, selectedNodeId, layerToggles, isDark, focusedClusterId, setFocusedCluster, setReadPaperIds } = useSessionStore()
 
   const [graphData, setGraphData] = useState<GraphData | null>(null)
   const [status, setStatus] = useState<LoadStatus>('loading')
@@ -94,6 +94,7 @@ export default function SessionPage({ params }: PageProps) {
           setSession(id, t)
           setGraphData(data.graph)
           setStatus('ready')
+          if (data.readPaperIds?.length) setReadPaperIds(data.readPaperIds)
           sessionStorage.setItem(`nexus_graph_${id}`, JSON.stringify(data.graph))
           if (t) sessionStorage.setItem(`nexus_seed_${id}`, t)
         }
@@ -292,6 +293,7 @@ export default function SessionPage({ params }: PageProps) {
             selectedNode={selectedNode}
             prunedClusters={prunedClusterList}
             isDark={isDark}
+            onDeselect={() => handleSelectNode(null, null)}
           />
           {focusedClusterId && (
             <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30">
@@ -318,6 +320,8 @@ export default function SessionPage({ params }: PageProps) {
               prunedClusters={prunedClusterList}
               aiAvailable={aiAvailable}
               allNodes={graphData?.nodes}
+              onFindSimilar={handleGoDeeper}
+              findingSimilar={goingDeeper}
             />
           </div>
         </div>
