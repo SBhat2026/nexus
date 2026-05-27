@@ -12,6 +12,11 @@ interface SessionState {
   layerToggles: LayerToggles
   log: LogEntry[]
   focusNodeId: string | null
+  expandedClusters: Set<string>
+  readPaperIds: Set<string>
+  isDark: boolean
+  dateFilter: { min: number; max: number } | null
+  focusedClusterId: string | null
 }
 
 interface SessionActions {
@@ -23,6 +28,11 @@ interface SessionActions {
   addLog: (entry: Omit<LogEntry, 'id' | 'timestamp'>) => void
   undoLastLog: () => void
   setFocusNode: (id: string | null) => void
+  toggleCluster: (id: string) => void
+  toggleRead: (id: string) => void
+  toggleTheme: () => void
+  setDateFilter: (range: { min: number; max: number } | null) => void
+  setFocusedCluster: (id: string | null) => void
 }
 
 export const useSessionStore = create<SessionState & SessionActions>((set, get) => ({
@@ -32,6 +42,11 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
   selectedNodeId: null,
   depth: 2,
   focusNodeId: null,
+  expandedClusters: new Set<string>(),
+  readPaperIds: new Set<string>(),
+  isDark: false,
+  dateFilter: null,
+  focusedClusterId: null,
   layerToggles: {
     papers: true,
     directions: true,
@@ -70,4 +85,24 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
     set((s) => ({ log: s.log.slice(0, -1) })),
 
   setFocusNode: (id) => set({ focusNodeId: id }),
+
+  toggleTheme: () => set((s) => ({ isDark: !s.isDark })),
+
+  toggleCluster: (id) => set((s) => {
+    const next = new Set(s.expandedClusters)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return { expandedClusters: next }
+  }),
+
+  toggleRead: (id) => set((s) => {
+    const next = new Set(s.readPaperIds)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return { readPaperIds: next }
+  }),
+
+  setDateFilter: (range) => set({ dateFilter: range }),
+
+  setFocusedCluster: (id) => set({ focusedClusterId: id }),
 }))
