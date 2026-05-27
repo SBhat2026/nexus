@@ -70,6 +70,7 @@ export async function POST(req: NextRequest) {
       bridgePotential?: string
       // session-level fallback fields
       clusterCount?: number
+      clusterLabels?: string[]
     }
     const sn = selectedNode as SelectedNode | null
 
@@ -104,6 +105,7 @@ export async function POST(req: NextRequest) {
         lines.push(`Session overview for: ${sn.label ?? seedTopic}`)
         if (sn.clusterCount != null) lines.push(`Total clusters: ${sn.clusterCount}`)
         if (sn.paperCount != null) lines.push(`Total papers analyzed: ${sn.paperCount}`)
+        if (sn.clusterLabels?.length) lines.push(`Cluster topics: ${sn.clusterLabels.join(', ')}`)
       }
       selInfo = lines.join('\n')
     }

@@ -8,7 +8,7 @@ import { cosineDistance } from '@/lib/clustering/dbscan'
 import { buildGraph } from '@/lib/graphBuilder'
 import { projectEmbeddings } from '@/lib/umap/project'
 import { createServerClient } from '@/lib/supabase/server'
-import { labelClusters } from '@/lib/anthropic/labelClusters'
+import { labelClusters, type LabelResult } from '@/lib/anthropic/labelClusters'
 import { labelClustersGroq } from '@/lib/groq/labelClusters'
 import { writeProgress } from '@/lib/progress/writer'
 
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     // 1. Fetch 150 papers from OpenAlex — 70% from last 3 years, 30% unconstrained
     const works = await searchWorks(seedTopic, 150, { recentRatio: 0.7, recentYears: 3 })
     if (works.length === 0) {
-      return Response.json({ error: 'No papers found for this topic', sessionId: null, graph: null }, { status: 200 })
+      return Response.json({ error: 'No papers found for this topic', sessionId: null, graph: null }, { status: 422 })
     }
 
     await writeProgress(sessionId, 'fetching', `Found ${works.length} papers`)
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
     const withEmbeddings = papers.filter((p) => p.embedding && p.embedding.length === 1024)
 
     if (withEmbeddings.length < 3) {
-      return Response.json({ error: 'Insufficient papers with embeddings for clustering' }, { status: 200 })
+      return Response.json({ error: 'Insufficient papers with embeddings for clustering' }, { status: 422 })
     }
 
     // 3. Cluster (PCA → UMAP 15D → DBSCAN) + UMAP 2D for visualization
@@ -201,9 +201,18 @@ export async function POST(req: NextRequest) {
           abstractPrefix: papersMapped[i].abstract.slice(0, 400),
         })),
     }))
-    let labelResult = await labelClusters(clusterInputs)
+    let labelResult: LabelResult = { labels: [], ai_available: false, reason: 'error' }
+    try {
+      labelResult = await labelClusters(clusterInputs)
+    } catch (err) {
+      console.warn('[session/create] Anthropic labeling threw, falling back to Groq:', err)
+    }
     if (labelResult.labels.length === 0 && clusterInputs.length > 0) {
-      labelResult = await labelClustersGroq(clusterInputs)
+      try {
+        labelResult = await labelClustersGroq(clusterInputs)
+      } catch (err) {
+        console.warn('[session/create] Groq labeling also failed, using generic labels:', err)
+      }
     }
     const labels = labelResult.labels
     if (labels.length > 0) {
@@ -231,6 +240,9 @@ export async function POST(req: NextRequest) {
         : null,
       is_outlier: pipeline.outlierFlags[i],
       is_representative: representativeIds.has(p.id),
+      nearest_cluster_id: pipeline.nearestClusterIndex[i] >= 0
+        ? `${sessionId}-cluster-${pipeline.nearestClusterIndex[i]}`
+        : null,
       tldr: null,
       s2_url: p.s2Url,
       venue: p.venue ?? null,

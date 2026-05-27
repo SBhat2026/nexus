@@ -1,7 +1,7 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, Star, Flag, Scissors, ExternalLink, BookOpen, Zap, Loader2, Focus, BookMarked, Building2 } from 'lucide-react'
+import { X, Flag, Scissors, ExternalLink, BookOpen, Zap, Loader2, Focus, BookMarked, Building2 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { GraphNode, PaperNode, ClusterNode, DirectionNode, OutlierNode, GraphEdge } from '@/lib/types'
@@ -22,17 +22,6 @@ interface Props {
   findingSimilar?: boolean
 }
 
-function StarRating({ value, onChange }: { value: number | null; onChange: (v: number) => void }) {
-  return (
-    <div className="flex gap-1">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button key={n} onClick={() => onChange(n)}>
-          <Star className={`w-4 h-4 transition ${(value ?? 0) >= n ? 'text-amber-400 fill-amber-400' : 'text-slate-300 dark:text-slate-600'}`} />
-        </button>
-      ))}
-    </div>
-  )
-}
 
 function ScorePill({ label, value, color }: { label: string; value: number; color: string }) {
   return (
@@ -334,7 +323,6 @@ type VerifyResult = {
 }
 
 function DirectionDetail({ node, onFlag }: { node: DirectionNode; onFlag: (id: string, note: string) => void }) {
-  const [rating, setRating] = useState<number | null>(node.humanRating)
   const [verifying, setVerifying] = useState(false)
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null)
   const [verifyError, setVerifyError] = useState<string | null>(null)
@@ -422,10 +410,6 @@ function DirectionDetail({ node, onFlag }: { node: DirectionNode; onFlag: (id: s
           </ul>
         </div>
       )}
-      <div>
-        <div className="text-xs text-slate-400 dark:text-slate-500 mb-1">Your rating</div>
-        <StarRating value={rating} onChange={setRating} />
-      </div>
       <button
         onClick={() => onFlag(node.id, 'Flagged for follow-up')}
         className={`flex items-center gap-1.5 text-xs transition ${node.isFlagged ? 'text-amber-500' : 'text-slate-400 hover:text-amber-500'}`}
@@ -444,6 +428,7 @@ function OutlierDetail({
   sessionId,
   aiAvailable = true,
   hasByokKey = false,
+  allNodes = [],
 }: {
   node: OutlierNode
   onFlag: (id: string, note: string) => void
@@ -452,9 +437,16 @@ function OutlierDetail({
   sessionId?: string
   aiAvailable?: boolean
   hasByokKey?: boolean
+  allNodes?: GraphNode[]
 }) {
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
+
+  const nearestCluster = allNodes.find((n) => n.id === node.nearestClusterId) as ClusterNode | undefined
+  const computedExplanation = node.outlierExplanation
+    ?? (nearestCluster
+      ? `Nearest cluster is "${nearestCluster.label}", but this paper's embedding is too distant to be assigned — it may represent a distinct research angle.`
+      : 'This paper is semantically distant from all clusters — it may represent an entirely different research direction.')
 
   async function handleGenerateDirections() {
     if (!sessionId || generating) return
@@ -503,12 +495,10 @@ function OutlierDetail({
           <div>Mahalanobis dist.</div>
         </div>
       </div>
-      {node.outlierExplanation && (
-        <div className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-          <span className="text-slate-400 dark:text-slate-500 font-medium">Why it&apos;s an outlier: </span>
-          {node.outlierExplanation}
-        </div>
-      )}
+      <div className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+        <span className="text-slate-400 dark:text-slate-500 font-medium">Why it&apos;s an outlier: </span>
+        {computedExplanation}
+      </div>
       {node.bridgePotential && (
         <div className="text-xs text-slate-600 dark:text-slate-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-lg p-3 leading-relaxed">
           <span className="text-amber-600 dark:text-amber-500 font-medium">Bridge potential: </span>
@@ -571,7 +561,7 @@ export default function RightSidebar({ node, onClose, onPrune, onUnprune, onFlag
             {node.nodeType === 'paper' && <PaperDetail node={node as PaperNode} onFindSimilar={onFindSimilar} findingSimilar={findingSimilar} />}
             {node.nodeType === 'cluster' && <ClusterDetail node={node as ClusterNode} onPrune={onPrune} onUnprune={onUnprune} onDirectionsGenerated={onDirectionsGenerated} onAiUnavailable={onAiUnavailable} sessionId={sessionId} prunedClusters={prunedClusters} aiAvailable={aiAvailable} hasByokKey={hasByokKey} allNodes={allNodes} />}
             {node.nodeType === 'direction' && <DirectionDetail node={node as DirectionNode} onFlag={onFlag} />}
-            {node.nodeType === 'outlier' && <OutlierDetail node={node as OutlierNode} onFlag={onFlag} onDirectionsGenerated={onDirectionsGenerated} onAiUnavailable={onAiUnavailable} sessionId={sessionId} aiAvailable={aiAvailable} hasByokKey={hasByokKey} />}
+            {node.nodeType === 'outlier' && <OutlierDetail node={node as OutlierNode} onFlag={onFlag} onDirectionsGenerated={onDirectionsGenerated} onAiUnavailable={onAiUnavailable} sessionId={sessionId} aiAvailable={aiAvailable} hasByokKey={hasByokKey} allNodes={allNodes} />}
           </div>
         </motion.aside>
       )}

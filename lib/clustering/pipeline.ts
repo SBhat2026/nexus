@@ -65,7 +65,16 @@ export function runClusteringPipeline(vectors: number[][]): PipelineResult {
   // 4. DBSCAN on UMAP output — density-clustering uses Euclidean by default
   const dbscan = new clustering.DBSCAN()
   const minPts = Math.max(3, Math.ceil(n / 20))
-  const rawClusters: number[][] = dbscan.run(umapOut, 0.65, minPts) as number[][]
+  // Adaptive epsilon: 90th percentile of 4th-nearest-neighbor distances, clamped [0.4, 1.2]
+  const knnDists = umapOut.map((pt, i) =>
+    umapOut
+      .map((other, j) => j === i ? Infinity : Math.sqrt(other.reduce((s, v, d) => s + (v - pt[d]) ** 2, 0)))
+      .sort((a, b) => a - b)[3]
+  ).sort((a, b) => a - b)
+  const p90 = knnDists[Math.floor(knnDists.length * 0.9)]
+  const epsilon = Math.min(1.2, Math.max(0.4, p90))
+  console.log(`[clustering] adaptive epsilon: ${epsilon.toFixed(3)} (n=${n}, minPts=${minPts})`)
+  const rawClusters: number[][] = dbscan.run(umapOut, epsilon, minPts) as number[][]
   const noise: number[] = dbscan.noise as number[]
 
   // Merge micro-clusters (< minPts) into nearest large cluster by UMAP centroid distance

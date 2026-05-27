@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: 'Failed to load papers' }, { status: 500 })
     }
     if (!papers || papers.length < 3) {
-      return Response.json({ error: 'Too few papers in this range — broaden the dates.' }, { status: 200 })
+      return Response.json({ error: 'Too few papers in this range — broaden the dates.' }, { status: 422 })
     }
 
     // Fetch embeddings from cache
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
 
     const withEmb = (papers as PaperRow[]).filter((p) => embMap.has(p.s2_paper_id))
     if (withEmb.length < 3) {
-      return Response.json({ error: 'Too few papers with embeddings in this range.' }, { status: 200 })
+      return Response.json({ error: 'Too few papers with embeddings in this range.' }, { status: 422 })
     }
 
     const vectors = withEmb.map((p) => embMap.get(p.s2_paper_id) as number[])

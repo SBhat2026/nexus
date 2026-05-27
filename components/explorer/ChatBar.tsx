@@ -130,6 +130,8 @@ export default function ChatBar({
               seedTopic,
               clusterCount,
               paperCount,
+              label: seedTopic,
+              clusterLabels: clusters.map(c => c.label),
             },
             prunedClusters: prunedClusters.map(p => ({ label: p.label, reason: p.reason })),
             directions,
@@ -249,14 +251,14 @@ export default function ChatBar({
             )}
           </div>
         ) : (
-          <div className="shrink-0 text-[11px] text-slate-400 dark:text-slate-500 truncate max-w-[160px] hidden sm:block select-none">
+          <div className="shrink-0 text-[11px] text-slate-400 dark:text-slate-500 truncate max-w-[180px] hidden sm:block select-none">
             {navigating ? (
               <span className="flex items-center gap-1">
                 <Loader2 className="w-3 h-3 animate-spin" />
                 Creating session…
               </span>
             ) : (
-              seedTopic || 'Research map'
+              'Discussing: full research map'
             )}
           </div>
         )}

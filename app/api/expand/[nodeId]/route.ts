@@ -4,6 +4,7 @@ import { fetchReferences, oaId } from '@/lib/openalex/client'
 import { getPapersWithEmbeddings } from '@/lib/papers/cache'
 import { createServerClient } from '@/lib/supabase/server'
 import { runClusteringPipeline } from '@/lib/clustering/pipeline'
+import { cosineDistance } from '@/lib/clustering/dbscan'
 import { projectEmbeddings } from '@/lib/umap/project'
 import { labelClustersGroq } from '@/lib/groq/labelClusters'
 import type { ClusterNode, PaperNode, GraphEdge } from '@/lib/types'
@@ -57,6 +58,24 @@ export async function POST(
       clusterMedianYears.set(i, computeMedianYear(c.memberIndices.map((idx) => withEmbeddings[idx].year ?? 0)))
     })
 
+    // Compute representative papers: 1 centroid-closest + 2 highest citation per cluster
+    const representativeIds = new Set<string>()
+    pipeline.clusters.forEach((c) => {
+      if (c.memberIndices.length === 0) return
+      let minDist = Infinity, centroidIdx = -1
+      c.memberIndices.forEach((pi) => {
+        const d = cosineDistance(vectors[pi], c.center)
+        if (d < minDist) { minDist = d; centroidIdx = pi }
+      })
+      const centroidExtId = centroidIdx >= 0 ? withEmbeddings[centroidIdx].external_id : null
+      if (centroidExtId) representativeIds.add(centroidExtId)
+      c.memberIndices
+        .filter((pi) => withEmbeddings[pi].external_id !== centroidExtId)
+        .sort((a, b) => (withEmbeddings[b].citation_count ?? 0) - (withEmbeddings[a].citation_count ?? 0))
+        .slice(0, 2)
+        .forEach((pi) => representativeIds.add(withEmbeddings[pi].external_id))
+    })
+
     const newNodes: (ClusterNode | PaperNode)[] = []
     const newEdges: GraphEdge[] = []
 
@@ -97,7 +116,13 @@ export async function POST(
         abstractPrefix: (withEmbeddings[pi].abstract ?? '').slice(0, 400),
       })),
     }))
-    const labelResult = await labelClustersGroq(clusterInputs)
+    let labelResult = { labels: [] as Awaited<ReturnType<typeof labelClustersGroq>>['labels'] }
+    try {
+      const r = await labelClustersGroq(clusterInputs)
+      labelResult = r
+    } catch (err) {
+      console.warn('[expand/nodeId] Groq labeling failed, using generic labels:', err)
+    }
     const labelMap = new Map(labelResult.labels.map((l) => [l.clusterIndex, l]))
 
     if (labelResult.labels.length > 0) {
@@ -161,6 +186,10 @@ export async function POST(
         embedding: p.embedding,
         cluster_id: clusterId,
         is_outlier: pipeline.outlierFlags[i],
+        is_representative: representativeIds.has(p.external_id),
+        nearest_cluster_id: pipeline.nearestClusterIndex[i] >= 0
+          ? `${clusterPrefix}-${pipeline.nearestClusterIndex[i]}`
+          : null,
         tldr: null,
         s2_url: `https://openalex.org/${p.external_id}`,
         venue: work?.primary_location?.source?.display_name ?? null,

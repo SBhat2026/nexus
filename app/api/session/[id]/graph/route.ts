@@ -68,7 +68,7 @@ export async function GET(
           year: p.year ?? 0,
           citationCount: p.citation_count,
           mahalanobisDistance: 0,
-          nearestClusterId: p.cluster_id ?? '',
+          nearestClusterId: p.nearest_cluster_id ?? p.cluster_id ?? '',
           overlapClusterIds: p.cluster_id ? [p.cluster_id] : [],
           isFlagged: flaggedNodes.has(p.id),
           umapX: p.umap_x ?? undefined,
