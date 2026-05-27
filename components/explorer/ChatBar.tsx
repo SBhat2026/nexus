@@ -24,6 +24,24 @@ interface Props {
   selectedNode: GraphNode | null
   prunedClusters: { id: string; label: string; reason: string }[]
   isDark?: boolean
+  onDeselect?: () => void
+}
+
+function labelFor(node: GraphNode): string {
+  if (node.nodeType === 'paper') {
+    const t = (node as import('@/lib/types').PaperNode).title
+    return t.length > 32 ? t.slice(0, 30) + '…' : t
+  }
+  if (node.nodeType === 'cluster') return (node as ClusterNode).label
+  if (node.nodeType === 'direction') {
+    const t = (node as DirectionNode).title
+    return t.length > 32 ? t.slice(0, 30) + '…' : t
+  }
+  if (node.nodeType === 'outlier') {
+    const t = (node as import('@/lib/types').OutlierNode).title
+    return 'Outlier: ' + (t.length > 24 ? t.slice(0, 22) + '…' : t)
+  }
+  return 'item'
 }
 
 export default function ChatBar({
@@ -32,6 +50,7 @@ export default function ChatBar({
   graphNodes,
   selectedNode,
   prunedClusters,
+  onDeselect,
 }: Props) {
   const router = useRouter()
   const [messages, setMessages] = useState<Message[]>([])
@@ -42,6 +61,9 @@ export default function ChatBar({
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const hasMessages = messages.length > 0
+
+  const clusterCount = graphNodes.filter((n) => n.nodeType === 'cluster').length
+  const paperCount = graphNodes.filter((n) => n.nodeType === 'paper').length
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -105,7 +127,12 @@ export default function ChatBar({
           context: {
             seedTopic,
             clusters,
-            selectedNode: nodeContextFor(selectedNode),
+            selectedNode: nodeContextFor(selectedNode) ?? {
+              nodeType: 'session',
+              seedTopic,
+              clusterCount,
+              paperCount,
+            },
             prunedClusters: prunedClusters.map(p => ({ label: p.label, reason: p.reason })),
             directions,
           },
@@ -216,6 +243,28 @@ export default function ChatBar({
         </div>
       )}
 
+      {/* Context pill */}
+      <div className="shrink-0 pointer-events-auto mb-2 flex justify-center">
+        {selectedNode ? (
+          <div className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-full px-3 py-1 text-xs text-blue-700 dark:text-blue-300 max-w-[360px]">
+            <span className="truncate">Discussing: {labelFor(selectedNode)}</span>
+            {onDeselect && (
+              <button
+                onClick={onDeselect}
+                className="shrink-0 ml-0.5 text-blue-400 hover:text-blue-700 dark:hover:text-blue-200 transition text-sm leading-none"
+                title="Clear selection"
+              >×</button>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 bg-slate-100/80 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-1 text-xs text-slate-400 dark:text-slate-500 max-w-[400px]">
+            <span className="truncate">{seedTopic || 'Research map'}</span>
+            {clusterCount > 0 && <><span className="text-slate-300 dark:text-slate-600 shrink-0">·</span><span className="shrink-0">{clusterCount} clusters</span></>}
+            {paperCount > 0 && <><span className="text-slate-300 dark:text-slate-600 shrink-0">·</span><span className="shrink-0">{paperCount} papers</span></>}
+          </div>
+        )}
+      </div>
+
       {/* Floating pill input — always at the bottom, never hidden */}
       <div className="shrink-0 pointer-events-auto flex items-center gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-lg px-5 py-3">
         <input
@@ -223,7 +272,7 @@ export default function ChatBar({
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-          placeholder="Ask about your research map…"
+          placeholder={selectedNode ? `Ask about ${labelFor(selectedNode)}…` : 'Ask about your research map…'}
           disabled={loading}
           className="flex-1 bg-transparent outline-none text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 disabled:opacity-60"
         />

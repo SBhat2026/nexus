@@ -68,6 +68,8 @@ export async function POST(req: NextRequest) {
       mahalanobisDistance?: number
       outlierExplanation?: string
       bridgePotential?: string
+      // session-level fallback fields
+      clusterCount?: number
     }
     const sn = selectedNode as SelectedNode | null
 
@@ -98,6 +100,10 @@ export async function POST(req: NextRequest) {
         if (sn.noveltyScore != null) lines.push(`Novelty: ${sn.noveltyScore}/10`)
         if (sn.feasibilityScore != null) lines.push(`Feasibility: ${sn.feasibilityScore}/10`)
         if (sn.suggestedNextSteps?.length) lines.push(`Next steps: ${sn.suggestedNextSteps.join('; ')}`)
+      } else if (sn.nodeType === 'session') {
+        lines.push(`Session overview for: ${sn.label ?? seedTopic}`)
+        if (sn.clusterCount != null) lines.push(`Total clusters: ${sn.clusterCount}`)
+        if (sn.paperCount != null) lines.push(`Total papers analyzed: ${sn.paperCount}`)
       }
       selInfo = lines.join('\n')
     }
