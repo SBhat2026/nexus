@@ -4,10 +4,14 @@ import NexusLogo from '@/components/NexusLogo'
 import PreviewGraph from '@/components/landing/PreviewGraph'
 import HowItWorks from '@/components/landing/HowItWorks'
 import FeatureCards from '@/components/landing/FeatureCards'
+import AuthButton from '@/components/AuthButton'
 
 export default function HomePage() {
   return (
     <main className="bg-white flex flex-col items-center">
+      <div className="absolute top-4 right-4 z-10">
+        <AuthButton />
+      </div>
 
       {/* Hero — full-height, content slightly above vertical center */}
       <section className="w-full min-h-screen flex flex-col items-center justify-center px-6 pt-16 pb-32">

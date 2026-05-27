@@ -8,6 +8,7 @@ import { cosineDistance } from '@/lib/clustering/dbscan'
 import { buildGraph } from '@/lib/graphBuilder'
 import { projectEmbeddings } from '@/lib/umap/project'
 import { createServerClient } from '@/lib/supabase/server'
+import { createAuthClient } from '@/utils/supabase/server'
 import { labelClusters, type LabelResult } from '@/lib/anthropic/labelClusters'
 import { labelClustersGroq } from '@/lib/groq/labelClusters'
 import { writeProgress } from '@/lib/progress/writer'
@@ -137,7 +138,20 @@ export async function POST(req: NextRequest) {
 
     // 6. Persist to Supabase
     await writeProgress(sessionId, 'saving', 'Persisting graph')
-    await db.from('sessions').insert({ id: sessionId, seed_topic: seedTopic })
+
+    // Attach user_id if authenticated
+    let authenticatedUserId: string | null = null
+    try {
+      const authClient = await createAuthClient()
+      const { data: { user } } = await authClient.auth.getUser()
+      authenticatedUserId = user?.id ?? null
+    } catch {}
+
+    await db.from('sessions').insert({
+      id: sessionId,
+      seed_topic: seedTopic,
+      ...(authenticatedUserId ? { user_id: authenticatedUserId } : {}),
+    })
 
     const clusterUmapCentroids = new Map<number, [number, number]>()
     pipeline.clusters.forEach((c) => {
