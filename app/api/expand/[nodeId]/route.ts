@@ -3,7 +3,12 @@ import { randomUUID } from 'crypto'
 import { fetchReferences, oaId } from '@/lib/openalex/client'
 import { getPapersWithEmbeddings } from '@/lib/papers/cache'
 import { createServerClient } from '@/lib/supabase/server'
-import type { PaperNode, GraphEdge } from '@/lib/types'
+import { runClusteringPipeline } from '@/lib/clustering/pipeline'
+import { projectEmbeddings } from '@/lib/umap/project'
+import { labelClustersGroq } from '@/lib/groq/labelClusters'
+import type { ClusterNode, PaperNode, GraphEdge } from '@/lib/types'
+
+export const maxDuration = 60
 
 export async function POST(
   req: NextRequest,
@@ -13,22 +18,19 @@ export async function POST(
     const { nodeId } = await params
     const body = await req.json()
     const sessionId: string = body.sessionId ?? ''
-    const externalId: string = body.s2PaperId ?? ''   // field name kept; holds OpenAlex ID
+    const externalId: string = body.s2PaperId ?? ''
+    const generation: number = typeof body.generation === 'number' ? body.generation : 2
 
     if (!sessionId || !externalId) {
       return Response.json({ error: 'sessionId and s2PaperId required' }, { status: 400 })
     }
 
-    // Fetch papers that cite this work (Go Deeper = find more context)
-    const relatedWorks = await fetchReferences(externalId, 20)
+    // Fetch related works — 70% from last 3 years, 30% unconstrained
+    const relatedWorks = await fetchReferences(externalId, 30, { recentRatio: 0.7, recentYears: 3 })
     const relatedIds = relatedWorks.map((w) => oaId(w.id))
 
     const db = createServerClient()
-    const { data: existing } = await db
-      .from('papers')
-      .select('s2_paper_id')
-      .eq('session_id', sessionId)
-
+    const { data: existing } = await db.from('papers').select('s2_paper_id').eq('session_id', sessionId)
     const existingIds = new Set((existing ?? []).map((r: { s2_paper_id: string }) => r.s2_paper_id))
     const newIds = relatedIds.filter((id) => !existingIds.has(id))
 
@@ -37,11 +39,113 @@ export async function POST(
     const cached = await getPapersWithEmbeddings(newIds)
     const withEmbeddings = cached.filter((p) => p.embedding?.length === 1024)
 
-    const newNodes: PaperNode[] = []
+    if (withEmbeddings.length < 3) return Response.json({ newNodes: [], newEdges: [] })
+
+    // Run full clustering pipeline on new papers
+    const vectors = withEmbeddings.map((p) => p.embedding as number[])
+    const pipeline = runClusteringPipeline(vectors)
+    const umapCoords = projectEmbeddings(vectors)
+
+    function computeMedianYear(years: number[]): number | null {
+      const valid = years.filter((y) => y > 0).sort((a, b) => a - b)
+      if (!valid.length) return null
+      const mid = Math.floor(valid.length / 2)
+      return valid.length % 2 ? valid[mid] : Math.round((valid[mid - 1] + valid[mid]) / 2)
+    }
+    const clusterMedianYears = new Map<number, number | null>()
+    pipeline.clusters.forEach((c, i) => {
+      clusterMedianYears.set(i, computeMedianYear(c.memberIndices.map((idx) => withEmbeddings[idx].year ?? 0)))
+    })
+
+    const newNodes: (ClusterNode | PaperNode)[] = []
     const newEdges: GraphEdge[] = []
 
-    if (withEmbeddings.length > 0) {
-      const rows = withEmbeddings.map((p) => ({
+    const clusterPrefix = `${sessionId}-cluster-g${generation}`
+
+    // Compute UMAP centroids per cluster
+    const clusterUmapCentroids = new Map<number, [number, number]>()
+    pipeline.clusters.forEach((c, i) => {
+      const xs = c.memberIndices.map((idx) => umapCoords[idx][0])
+      const ys = c.memberIndices.map((idx) => umapCoords[idx][1])
+      clusterUmapCentroids.set(i, [
+        xs.reduce((a, b) => a + b, 0) / xs.length,
+        ys.reduce((a, b) => a + b, 0) / ys.length,
+      ])
+    })
+
+    // Insert cluster rows
+    const clusterDbRows = pipeline.clusters.map((c, i) => ({
+      id: `${clusterPrefix}-${i}`,
+      session_id: sessionId,
+      label: `Cluster ${String.fromCharCode(65 + i)} (${c.memberIndices.length})`,
+      description: null as string | null,
+      center_embedding: c.center,
+      paper_count: c.memberIndices.length,
+      field: null as string | null,
+      is_pruned: false,
+      median_year: clusterMedianYears.get(i) ?? null,
+    }))
+    if (clusterDbRows.length > 0) {
+      await db.from('clusters').insert(clusterDbRows)
+    }
+
+    // Label new clusters
+    const clusterInputs = pipeline.clusters.map((c, i) => ({
+      clusterIndex: i,
+      papers: c.memberIndices.slice(0, 5).map((pi) => ({
+        title: withEmbeddings[pi].title,
+        abstractPrefix: (withEmbeddings[pi].abstract ?? '').slice(0, 400),
+      })),
+    }))
+    const labelResult = await labelClustersGroq(clusterInputs)
+    const labelMap = new Map(labelResult.labels.map((l) => [l.clusterIndex, l]))
+
+    if (labelResult.labels.length > 0) {
+      await Promise.all(labelResult.labels.map((l) =>
+        db.from('clusters')
+          .update({ label: l.label, description: l.description, field: l.field })
+          .eq('id', `${clusterPrefix}-${l.clusterIndex}`)
+          .eq('session_id', sessionId)
+      ))
+    }
+
+    // Build ClusterNode objects
+    const newClusterIds = new Set<string>()
+    pipeline.clusters.forEach((c, i) => {
+      const lbl = labelMap.get(i)
+      const umapCentroid = clusterUmapCentroids.get(i)
+      const clusterId = `${clusterPrefix}-${i}`
+      newClusterIds.add(clusterId)
+      const clusterNode: ClusterNode = {
+        id: clusterId,
+        nodeType: 'cluster',
+        label: lbl?.label ?? `Cluster ${String.fromCharCode(65 + i)} (${c.memberIndices.length})`,
+        description: lbl?.description ?? '',
+        paperCount: c.memberIndices.length,
+        field: lbl?.field ?? 'default',
+        isPruned: false,
+        generation,
+        medianYear: clusterMedianYears.get(i) ?? null,
+        umapX: umapCentroid?.[0],
+        umapY: umapCentroid?.[1],
+      }
+      newNodes.push(clusterNode)
+      // Edge: source paper → new cluster (shows expansion origin)
+      newEdges.push({
+        id: `e-expand-${nodeId}-${clusterId}`,
+        source: nodeId,
+        target: clusterId,
+        edgeType: 'citation',
+        weight: 1,
+      })
+    })
+
+    // Insert paper rows and build PaperNode objects
+    const paperRows = withEmbeddings.map((p, i) => {
+      const clusterIdx = pipeline.assignments[i]
+      const clusterId = clusterIdx >= 0 ? `${clusterPrefix}-${clusterIdx}` : null
+      const [umapX, umapY] = umapCoords[i] ?? [null, null]
+      return {
         id: randomUUID(),
         session_id: sessionId,
         s2_paper_id: p.external_id,
@@ -51,48 +155,45 @@ export async function POST(
         year: p.year ?? null,
         citation_count: p.citation_count,
         embedding: p.embedding,
-        cluster_id: null,
-        is_outlier: false,
+        cluster_id: clusterId,
+        is_outlier: pipeline.outlierFlags[i],
         tldr: null,
         s2_url: `https://openalex.org/${p.external_id}`,
-      }))
+        umap_x: umapX as number | null,
+        umap_y: umapY as number | null,
+      }
+    })
+    if (paperRows.length > 0) await db.from('papers').insert(paperRows)
 
-      await db.from('papers').insert(rows)
+    paperRows.forEach((r) => {
+      newNodes.push({
+        id: r.id,
+        nodeType: 'paper',
+        s2PaperId: r.s2_paper_id,
+        title: r.title,
+        abstract: r.abstract ?? '',
+        authors: r.authors,
+        year: r.year ?? 0,
+        citationCount: r.citation_count,
+        clusterId: r.cluster_id,
+        isOutlier: r.is_outlier,
+        s2Url: r.s2_url,
+        umapX: r.umap_x ?? undefined,
+        umapY: r.umap_y ?? undefined,
+      } as PaperNode)
+    })
 
-      rows.forEach((r) => {
-        newNodes.push({
-          id: r.id,
-          nodeType: 'paper',
-          s2PaperId: r.s2_paper_id,
-          title: r.title,
-          abstract: r.abstract ?? '',
-          authors: r.authors,
-          year: r.year ?? 0,
-          citationCount: r.citation_count,
-          clusterId: null,
-          isOutlier: false,
-          s2Url: r.s2_url,
-        })
-        newEdges.push({
-          id: `e-expand-${nodeId}-${r.id}`,
-          source: nodeId,
-          target: r.id,
-          edgeType: 'citation',
-          weight: 1,
-        })
-      })
-
-      const edgeRows = newEdges.map((e) => ({
-        session_id: sessionId,
-        source_id: e.source,
-        source_type: 'paper',
-        target_id: e.target,
-        target_type: 'paper',
-        weight: e.weight,
-        edge_type: e.edgeType,
-      }))
-      await db.from('edges').insert(edgeRows)
-    }
+    // Save edges
+    const edgeRows = newEdges.map((e) => ({
+      session_id: sessionId,
+      source_id: e.source,
+      source_type: 'paper',
+      target_id: e.target,
+      target_type: newClusterIds.has(e.target) ? 'cluster' : 'paper',
+      weight: e.weight,
+      edge_type: e.edgeType,
+    }))
+    if (edgeRows.length > 0) await db.from('edges').insert(edgeRows)
 
     return Response.json({ newNodes, newEdges })
   } catch (err) {

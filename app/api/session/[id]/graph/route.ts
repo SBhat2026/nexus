@@ -45,6 +45,10 @@ export async function GET(
         field: c.field ?? 'default',
         isPruned: prunedClusters.has(c.id) || c.is_pruned,
         pruneReason: pruneReasons.get(c.id) ?? c.prune_reason ?? undefined,
+        clusterQuality: c.cluster_quality ?? undefined,
+        umapX: c.umap_x ?? undefined,
+        umapY: c.umap_y ?? undefined,
+        medianYear: c.median_year ?? undefined,
       }
       nodes.push(clusterNode)
     })
@@ -65,6 +69,8 @@ export async function GET(
           nearestClusterId: p.cluster_id ?? '',
           overlapClusterIds: p.cluster_id ? [p.cluster_id] : [],
           isFlagged: flaggedNodes.has(p.id),
+          umapX: p.umap_x ?? undefined,
+          umapY: p.umap_y ?? undefined,
         }
         nodes.push(o)
       } else {
@@ -79,8 +85,11 @@ export async function GET(
           citationCount: p.citation_count,
           clusterId: p.cluster_id,
           isOutlier: false,
+          isRepresentative: p.is_representative ?? false,
           tldr: p.tldr ?? undefined,
           s2Url: p.s2_url ?? undefined,
+          umapX: p.umap_x ?? undefined,
+          umapY: p.umap_y ?? undefined,
         }
         nodes.push(paper)
       }

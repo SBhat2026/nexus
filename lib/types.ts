@@ -9,6 +9,8 @@ export interface BaseNode {
   vy?: number
   fx?: number | null
   fy?: number | null
+  umapX?: number
+  umapY?: number
 }
 
 export interface PaperNode extends BaseNode {
@@ -21,6 +23,7 @@ export interface PaperNode extends BaseNode {
   citationCount: number
   clusterId: string | null
   isOutlier: boolean
+  isRepresentative?: boolean
   tldr?: string
   pdfUrl?: string
   s2Url?: string
@@ -34,6 +37,9 @@ export interface ClusterNode extends BaseNode {
   field: string
   isPruned: boolean
   pruneReason?: string
+  clusterQuality?: number
+  generation?: number  // 1 = initial; 2+ = Go Deeper rounds
+  medianYear?: number | null
 }
 
 export interface DirectionNode extends BaseNode {
