@@ -417,6 +417,14 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
       return ''
     })
 
+    // Enter fade-in — nodes and edges appear instead of popping
+    edgeSel.attr('stroke-opacity', 0)
+      .transition().duration(250)
+      .attr('stroke-opacity', 0.25)
+    nodeSel.attr('opacity', 0)
+      .transition().duration(250)
+      .attr('opacity', 1)
+
     sim.on('tick', () => {
       edgeSel
         .attr('x1', (e) => ((e.source as unknown) as GraphNode).x ?? 0)
@@ -429,6 +437,7 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
     // Legend
     const legend = svg.append('g')
       .attr('transform', `translate(16, ${height - 100})`)
+      .attr('filter', 'drop-shadow(0 2px 6px rgba(0,0,0,0.14))')
 
     const legendItems = [
       { shape: 'circle', r: 10, fill: '#3b82f633', stroke: '#3b82f6', label: 'Cluster (click to expand)' },
@@ -533,13 +542,13 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
           <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 leading-snug line-clamp-2 mb-1">
             {tooltip.paper.title}
           </p>
-          <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-snug">
+          <p className="text-xs text-slate-500 dark:text-slate-400 leading-snug">
             {tooltip.paper.authors.slice(0, 3).join(', ')}{tooltip.paper.authors.length > 3 ? ' et al.' : ''}
           </p>
-          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-            {tooltip.paper.year}
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            <span className="font-mono tabular-nums">{tooltip.paper.year}</span>
             {tooltip.paper.venue ? ` · ${tooltip.paper.venue.length > 20 ? tooltip.paper.venue.slice(0, 18) + '…' : tooltip.paper.venue}` : ''}
-            {' · '}{tooltip.paper.citationCount.toLocaleString()} cites
+            {' · '}<span className="font-mono tabular-nums">{tooltip.paper.citationCount.toLocaleString()}</span> cites
           </p>
         </div>
       )}
@@ -548,8 +557,10 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
       <div className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
         bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700
         text-slate-500 dark:text-slate-400 backdrop-blur-sm">
-        <span className="text-slate-800 dark:text-slate-200 font-semibold">{visiblePaperCount}</span>
-        <span>/ {totalPaperCount} papers visible</span>
+        <span className="font-mono tabular-nums text-slate-800 dark:text-slate-200 font-semibold">{visiblePaperCount}</span>
+        <span> / </span>
+        <span className="font-mono tabular-nums">{totalPaperCount}</span>
+        <span> papers visible</span>
       </div>
 
       {/* Node type legend (light-mode-aware, in SVG already — this is just fallback text) */}

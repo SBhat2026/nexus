@@ -286,15 +286,6 @@ export default function SessionPage({ params }: PageProps) {
             pruned={pruned}
             isDark={isDark}
           />
-          <ChatBar
-            sessionId={id}
-            seedTopic={seedTopic}
-            graphNodes={graphData?.nodes ?? []}
-            selectedNode={selectedNode}
-            prunedClusters={prunedClusterList}
-            isDark={isDark}
-            onDeselect={() => handleSelectNode(null, null)}
-          />
           {focusedClusterId && (
             <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30">
               <button
@@ -326,6 +317,15 @@ export default function SessionPage({ params }: PageProps) {
           </div>
         </div>
       </div>
+      <ChatBar
+        sessionId={id}
+        seedTopic={seedTopic}
+        graphNodes={graphData?.nodes ?? []}
+        selectedNode={selectedNode}
+        prunedClusters={prunedClusterList}
+        isDark={isDark}
+        onDeselect={() => handleSelectNode(null, null)}
+      />
     </div>
   )
 }
