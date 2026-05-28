@@ -30,6 +30,8 @@ export interface PipelineResult {
   nearestClusterIndex: number[]
   /** Mean pairwise cosine similarity within each cluster (0–1). */
   clusterQuality: Record<number, number>
+  /** PCA-reduced vectors (n × ≤100) — reuse as input to 2D UMAP for visualization. */
+  pcaOut: number[][]
 }
 
 export function runClusteringPipeline(vectors: number[][]): PipelineResult {
@@ -46,6 +48,7 @@ export function runClusteringPipeline(vectors: number[][]): PipelineResult {
       outlierDistances,
       nearestClusterIndex,
       clusterQuality: {},
+      pcaOut: vectors,
     }
   }
 
@@ -117,18 +120,20 @@ export function runClusteringPipeline(vectors: number[][]): PipelineResult {
   const noiseSet = new Set(noise)
   const outlierFlags = vectors.map((_, i) => noiseSet.has(i))
 
-  // 7. Cluster quality = mean pairwise cosine similarity in normalized space
+  // 7. Cluster quality = sampled mean cosine similarity (30 pairs, O(1) vs O(n²))
   const clusterQuality: Record<number, number> = {}
+  const SAMPLES = 30
   clusterMetas.forEach((c) => {
     const vecs = c.memberIndices.map((i) => normalized[i])
-    let sum = 0, count = 0
-    for (let a = 0; a < vecs.length; a++) {
-      for (let b = a + 1; b < vecs.length; b++) {
-        sum += cosineSim(vecs[a], vecs[b])
-        count++
-      }
+    if (vecs.length < 2) { clusterQuality[c.clusterIndex] = 1.0; return }
+    let sum = 0
+    for (let k = 0; k < SAMPLES; k++) {
+      const a = Math.floor(Math.random() * vecs.length)
+      let b = Math.floor(Math.random() * vecs.length)
+      if (b === a) b = (b + 1) % vecs.length
+      sum += cosineSim(vecs[a], vecs[b])
     }
-    clusterQuality[c.clusterIndex] = count > 0 ? parseFloat((sum / count).toFixed(3)) : 1.0
+    clusterQuality[c.clusterIndex] = parseFloat((sum / SAMPLES).toFixed(3))
   })
 
   // 8. For each outlier, find nearest cluster centroid
@@ -145,5 +150,5 @@ export function runClusteringPipeline(vectors: number[][]): PipelineResult {
     })
   }
 
-  return { assignments, outlierFlags, clusters: clusterMetas, outlierDistances, nearestClusterIndex, clusterQuality }
+  return { assignments, outlierFlags, clusters: clusterMetas, outlierDistances, nearestClusterIndex, clusterQuality, pcaOut }
 }

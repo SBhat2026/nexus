@@ -544,7 +544,7 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
       )}
 
       {/* Paper count overlay */}
-      <div className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+      <div className="absolute top-3 right-52 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
         bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700
         text-slate-500 dark:text-slate-400 backdrop-blur-sm">
         <span className="font-mono tabular-nums text-slate-800 dark:text-slate-200 font-semibold">{visiblePaperCount}</span>

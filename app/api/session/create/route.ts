@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
     await writeProgress(sessionId, 'clustering', 'Running PCA + UMAP + DBSCAN')
     const vectors = withEmbeddings.map((p) => p.embedding as number[])
     const pipeline = runClusteringPipeline(vectors)
-    const umapCoords = projectEmbeddings(vectors)
+    const umapCoords = projectEmbeddings(pipeline.pcaOut)
 
     // 4. Map papers
     const idToWork = new Map(works.map((w) => [w.id, w]))
@@ -233,16 +233,12 @@ export async function POST(req: NextRequest) {
     }))
     let labelResult: LabelResult = { labels: [], ai_available: false, reason: 'error' }
     try {
-      labelResult = await labelClusters(clusterInputs)
+      labelResult = await Promise.any([
+        labelClusters(clusterInputs).then((r) => r.labels.length > 0 ? r : Promise.reject(new Error('empty'))),
+        labelClustersGroq(clusterInputs).then((r) => r.labels.length > 0 ? r : Promise.reject(new Error('empty'))),
+      ])
     } catch (err) {
-      console.warn('[session/create] Anthropic labeling threw, falling back to Groq:', err)
-    }
-    if (labelResult.labels.length === 0 && clusterInputs.length > 0) {
-      try {
-        labelResult = await labelClustersGroq(clusterInputs)
-      } catch (err) {
-        console.warn('[session/create] Groq labeling also failed, using generic labels:', err)
-      }
+      console.warn('[session/create] both labelers failed, using generic labels:', err)
     }
     const labels = labelResult.labels
     if (labels.length > 0) {
@@ -279,8 +275,6 @@ export async function POST(req: NextRequest) {
       umap_x: umapCoords[i]?.[0] ?? null,
       umap_y: umapCoords[i]?.[1] ?? null,
     }))
-    if (paperRows.length > 0) await db.from('papers').insert(paperRows)
-
     const edgeRows = graph.edges.slice(0, 500).map((e) => ({
       session_id: sessionId,
       source_id: e.source,
@@ -290,7 +284,10 @@ export async function POST(req: NextRequest) {
       weight: e.weight,
       edge_type: e.edgeType,
     }))
-    if (edgeRows.length > 0) await db.from('edges').insert(edgeRows)
+    await Promise.all([
+      paperRows.length > 0 ? db.from('papers').insert(paperRows) : Promise.resolve(),
+      edgeRows.length > 0 ? db.from('edges').insert(edgeRows) : Promise.resolve(),
+    ])
 
     // Build label map for in-response enrichment
     const labelMap = new Map(labels.map((l) => [l.clusterIndex, l]))
