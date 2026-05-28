@@ -59,7 +59,10 @@ export async function getPapersWithEmbeddings(oaIds: string[]): Promise<CachedPa
     ])
   )
 
-  const missing = oaIds.filter((id) => !cachedMap.has(id))
+  const missing = oaIds.filter((id) => {
+    const paper = cachedMap.get(id)
+    return !paper || !paper.embedding || paper.embedding.length !== 1024
+  })
 
   if (missing.length > 0) {
     // Fetch paper metadata from OpenAlex

@@ -11,7 +11,9 @@ import LoadingState from '@/components/explorer/LoadingState'
 import ErrorState from '@/components/explorer/ErrorState'
 import ChatBar from '@/components/explorer/ChatBar'
 import AuthButton from '@/components/AuthButton'
+import SignInModal from '@/components/SignInModal'
 import { createClient } from '@/lib/supabase/client'
+import { useSessionHeartbeat } from '@/hooks/useSessionHeartbeat'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -21,7 +23,7 @@ type LoadStatus = 'loading' | 'ready' | 'error'
 
 export default function SessionPage({ params }: PageProps) {
   const { id } = use(params)
-  const { setSession, selectNode, selectedNodeId, layerToggles, isDark, focusedClusterId, setFocusedCluster, setReadPaperIds } = useSessionStore()
+  const { setSession, selectNode, selectedNodeId, layerToggles, isDark, focusedClusterId, setFocusedCluster, setReadPaperIds, setSourceProvider } = useSessionStore()
 
   const [graphData, setGraphData] = useState<GraphData | null>(null)
   const [status, setStatus] = useState<LoadStatus>('loading')
@@ -43,7 +45,7 @@ export default function SessionPage({ params }: PageProps) {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [showAuthToast, setShowAuthToast] = useState(false)
+  const [showSignInModal, setShowSignInModal] = useState(false)
   const [showGoDeepGate, setShowGoDeepGate] = useState(false)
 
   const startLeftResize = useCallback((e: React.PointerEvent) => {
@@ -92,18 +94,22 @@ export default function SessionPage({ params }: PageProps) {
   async function handleSave() {
     if (isSaved || saving) return
     if (!isLoggedIn) {
-      setShowAuthToast(true)
-      setTimeout(() => setShowAuthToast(false), 4000)
+      setShowSignInModal(true)
       return
     }
     setSaving(true)
     try {
       await fetch(`/api/session/${id}/save`, { method: 'PATCH' })
       setIsSaved(true)
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem(`nexus_saved_${id}`, '1')
+      }
     } finally {
       setSaving(false)
     }
   }
+
+  useSessionHeartbeat(id)
 
   useEffect(() => {
     let cancelled = false
@@ -121,6 +127,11 @@ export default function SessionPage({ params }: PageProps) {
         const raw = sessionStorage.getItem(`nexus_graph_${id}`)
         if (raw) { try { cachedGraph = JSON.parse(raw) } catch {} }
       }
+
+      const cachedSource = sessionStorage.getItem(`nexus_source_${id}`) as 'openalex' | 'core' | null
+      if (cachedSource) setSourceProvider(cachedSource)
+
+      if (sessionStorage.getItem(`nexus_saved_${id}`)) setIsSaved(true)
 
       // Use cache immediately if labels are already fresh (non-generic)
       if (cachedGraph) {
@@ -335,28 +346,17 @@ export default function SessionPage({ params }: PageProps) {
         <AIBanner reason={aiReason} onDismiss={() => setBannerDismissed(true)} />
       )}
 
-      {/* Auth + Save controls — top-right overlay */}
+      {/* Auth controls — top-right overlay */}
       <div className="absolute top-3 right-3 z-30 flex items-center gap-2">
-        <button
-          onClick={handleSave}
-          disabled={isSaved || saving}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-            isSaved
-              ? 'bg-green-100 text-green-700 cursor-default'
-              : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
-          }`}
-        >
-          {isSaved ? 'Saved ✓' : saving ? 'Saving…' : 'Save'}
-        </button>
         <AuthButton />
       </div>
 
-      {/* Auth toast for save when logged out */}
-      {showAuthToast && (
-        <div className="absolute top-14 right-3 z-40 bg-slate-900 text-white text-xs px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2">
-          <a href={`/login?returnTo=${encodeURIComponent(`/session/${id}`)}`} className="text-blue-400 hover:underline">Sign in</a>
-          <span>to save this session</span>
-        </div>
+      {showSignInModal && (
+        <SignInModal
+          title="Sign in to save your session"
+          description="Create a free account to save sessions, take notes, and return to your research anytime."
+          onClose={() => setShowSignInModal(false)}
+        />
       )}
 
       {/* Go Deeper gate modal */}
@@ -398,6 +398,10 @@ export default function SessionPage({ params }: PageProps) {
         <LeftSidebar
           onGoDeeper={handleGoDeeper}
           onExport={handleExport}
+          onSave={handleSave}
+          isLoggedIn={isLoggedIn}
+          isSaved={isSaved}
+          saving={saving}
           flaggedItems={flaggedItems}
           onJumpToNode={handleJumpToNode}
           onApplyDateFilter={handleApplyDateFilter}
@@ -455,6 +459,7 @@ export default function SessionPage({ params }: PageProps) {
               allNodes={graphData?.nodes}
               onFindSimilar={handleGoDeeper}
               findingSimilar={goingDeeper}
+              isLoggedIn={isLoggedIn}
             />
           </div>
         </div>

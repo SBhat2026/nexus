@@ -5,6 +5,7 @@ import { X, Flag, Scissors, ExternalLink, BookOpen, Zap, Loader2, Focus, BookMar
 import { useState, useEffect } from 'react'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { GraphNode, PaperNode, ClusterNode, DirectionNode, OutlierNode, GraphEdge } from '@/lib/types'
+import NotesPanel from '@/components/explorer/NotesPanel'
 
 interface Props {
   node: GraphNode | null
@@ -20,6 +21,7 @@ interface Props {
   allNodes?: GraphNode[]
   onFindSimilar?: () => void
   findingSimilar?: boolean
+  isLoggedIn?: boolean
 }
 
 
@@ -526,7 +528,7 @@ function OutlierDetail({
   )
 }
 
-export default function RightSidebar({ node, onClose, onPrune, onUnprune, onFlag, onDirectionsGenerated, onAiUnavailable, sessionId, prunedClusters = [], aiAvailable = true, allNodes, onFindSimilar, findingSimilar = false }: Props) {
+export default function RightSidebar({ node, onClose, onPrune, onUnprune, onFlag, onDirectionsGenerated, onAiUnavailable, sessionId, prunedClusters = [], aiAvailable = true, allNodes, onFindSimilar, findingSimilar = false, isLoggedIn = false }: Props) {
   const [hasByokKey, setHasByokKey] = useState(false)
 
   useEffect(() => {
@@ -562,6 +564,9 @@ export default function RightSidebar({ node, onClose, onPrune, onUnprune, onFlag
             {node.nodeType === 'cluster' && <ClusterDetail node={node as ClusterNode} onPrune={onPrune} onUnprune={onUnprune} onDirectionsGenerated={onDirectionsGenerated} onAiUnavailable={onAiUnavailable} sessionId={sessionId} prunedClusters={prunedClusters} aiAvailable={aiAvailable} hasByokKey={hasByokKey} allNodes={allNodes} />}
             {node.nodeType === 'direction' && <DirectionDetail node={node as DirectionNode} onFlag={onFlag} />}
             {node.nodeType === 'outlier' && <OutlierDetail node={node as OutlierNode} onFlag={onFlag} onDirectionsGenerated={onDirectionsGenerated} onAiUnavailable={onAiUnavailable} sessionId={sessionId} aiAvailable={aiAvailable} hasByokKey={hasByokKey} allNodes={allNodes} />}
+            {sessionId && (
+              <NotesPanel sessionId={sessionId} selectedNode={node} isLoggedIn={isLoggedIn} />
+            )}
           </div>
         </motion.aside>
       )}

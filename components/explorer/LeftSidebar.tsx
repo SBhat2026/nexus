@@ -2,13 +2,17 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import { ChevronDown, ChevronUp, ChevronRight, Download, GitBranch, Info, Sun, Moon, Home, Flag, Key, Network, Loader2, Calendar, X, Filter } from 'lucide-react'
+import { ChevronDown, ChevronUp, ChevronRight, Download, GitBranch, Info, Sun, Moon, Home, Flag, Key, Network, Loader2, Calendar, X, Filter, Bookmark, Check } from 'lucide-react'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { NodeType, GraphNode, ClusterNode, PaperNode } from '@/lib/types'
 
 interface Props {
   onGoDeeper: () => void
   onExport: () => void
+  onSave?: () => void
+  isLoggedIn?: boolean
+  isSaved?: boolean
+  saving?: boolean
   flaggedItems: { id: string; title: string; nodeType: NodeType }[]
   onJumpToNode: (id: string) => void
   onApplyDateFilter?: (min: number, max: number) => void
@@ -23,6 +27,10 @@ interface Props {
 export default function LeftSidebar({
   onGoDeeper,
   onExport,
+  onSave,
+  isLoggedIn = false,
+  isSaved = false,
+  saving = false,
   flaggedItems,
   onJumpToNode,
   onApplyDateFilter,
@@ -37,7 +45,7 @@ export default function LeftSidebar({
     sessionName, setSessionName, seedTopic, isDark, toggleTheme,
     expandedClusters, toggleCluster, focusedClusterId, setFocusedCluster,
     paperFilters, hideRead, toggleAuthorFilter, toggleVenueFilter,
-    setYearRangeFilter, clearPaperFilters, setHideRead,
+    setYearRangeFilter, clearPaperFilters, setHideRead, sourceProvider,
   } = useSessionStore()
   const [editingName, setEditingName] = useState(false)
   const [nameValue, setNameValue] = useState(sessionName)
@@ -591,6 +599,23 @@ export default function LeftSidebar({
         >
           <Download className="w-3.5 h-3.5" /> Export JSON
         </button>
+        <button
+          onClick={onSave}
+          disabled={isSaved || saving}
+          className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg border text-xs font-medium transition ${
+            isSaved
+              ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 cursor-default'
+              : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed'
+          }`}
+        >
+          {isSaved ? (
+            <><Check className="w-3.5 h-3.5" /> Saved</>
+          ) : saving ? (
+            <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…</>
+          ) : (
+            <><Bookmark className="w-3.5 h-3.5" /> Save Session</>
+          )}
+        </button>
       </div>
 
       <div className="p-3 border-t border-slate-200 dark:border-slate-700/60 shrink-0">
@@ -603,6 +628,11 @@ export default function LeftSidebar({
           </span>
           <span className="text-[10px] text-slate-300 dark:text-slate-600 group-hover:text-blue-400 transition">Guide →</span>
         </Link>
+        {sourceProvider && (
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center mt-1">
+            Source: {sourceProvider === 'core' ? 'CORE' : 'OpenAlex'}
+          </p>
+        )}
       </div>
     </aside>
   )

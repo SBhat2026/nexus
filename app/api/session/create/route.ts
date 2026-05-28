@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server'
 import { randomUUID } from 'crypto'
-import { searchWorks, oaId } from '@/lib/openalex/client'
-import { reconstructAbstract } from '@/lib/openalex/types'
+import { fetchPapers } from '@/lib/sources/index'
 import { getPapersWithEmbeddings } from '@/lib/papers/cache'
 import { runClusteringPipeline } from '@/lib/clustering/pipeline'
 import { cosineDistance } from '@/lib/clustering/dbscan'
@@ -33,15 +32,24 @@ export async function POST(req: NextRequest) {
 
     await writeProgress(sessionId, 'fetching', 'Searching OpenAlex…')
 
-    // 1. Fetch 150 papers from OpenAlex — 70% from last 3 years, 30% unconstrained
-    const works = await searchWorks(seedTopic, 150, { recentRatio: 0.7, recentYears: 3 })
-    if (works.length === 0) {
-      return Response.json({ error: 'No papers found for this topic', sessionId: null, graph: null }, { status: 422 })
+    // 1. Fetch 150 papers — decomposed queries → OpenAlex, fallback to CORE
+    const { works, provider, queries } = await fetchPapers(seedTopic, 150, { recentRatio: 0.7, recentYears: 3 })
+
+    console.log(`[pipeline] Papers fetched (${provider}): ${works.length}`)
+    console.log(`[pipeline] Queries used: ${queries.join(' | ')}`)
+
+    if (works.length < 10) {
+      return Response.json({
+        error: `Only ${works.length} papers found — try a broader or more specific query.`,
+        papersFound: works.length,
+        sessionId: null,
+        graph: null,
+      }, { status: 422 })
     }
 
-    await writeProgress(sessionId, 'fetching', `Found ${works.length} papers`)
+    await writeProgress(sessionId, 'fetching', `Found ${works.length} papers · Searched: ${queries.join(', ')}`)
 
-    const bareIds = works.map((w) => oaId(w.id))
+    const bareIds = works.map((w) => w.id)
 
     const db = createServerClient()
     const existingIds = await db
@@ -50,15 +58,15 @@ export async function POST(req: NextRequest) {
       .in('s2_paper_id', bareIds)
       .then((r) => new Set((r.data ?? []).map((x: { s2_paper_id: string }) => x.s2_paper_id)))
 
-    const newWorks = works.filter((w) => !existingIds.has(oaId(w.id)))
+    const newWorks = works.filter((w) => !existingIds.has(w.id))
     if (newWorks.length > 0) {
       const stubs = newWorks.map((w) => ({
-        s2_paper_id: oaId(w.id),
-        title: w.title || '',
-        abstract: reconstructAbstract(w.abstract_inverted_index) || null,
-        authors: w.authorships?.map((a) => a.author.display_name) ?? [],
-        year: w.publication_year,
-        citation_count: w.cited_by_count,
+        s2_paper_id: w.id,
+        title: w.title,
+        abstract: w.abstract,
+        authors: w.authors,
+        year: w.year,
+        citation_count: w.citationCount,
         embedding: null,
         tldr: null,
       }))
@@ -70,8 +78,12 @@ export async function POST(req: NextRequest) {
     const papers = await getPapersWithEmbeddings(bareIds)
     const withEmbeddings = papers.filter((p) => p.embedding && p.embedding.length === 1024)
 
-    if (withEmbeddings.length < 3) {
-      return Response.json({ error: 'Insufficient papers with embeddings for clustering' }, { status: 422 })
+    if (withEmbeddings.length < 5) {
+      return Response.json({
+        error: `Insufficient papers with embeddings for clustering (${withEmbeddings.length} of ${works.length} had embeddings). Try a different query.`,
+        papersFound: works.length,
+        withEmbeddings: withEmbeddings.length,
+      }, { status: 422 })
     }
 
     // 3. Cluster (PCA → UMAP 15D → DBSCAN) + UMAP 2D for visualization
@@ -81,9 +93,9 @@ export async function POST(req: NextRequest) {
     const umapCoords = projectEmbeddings(vectors)
 
     // 4. Map papers
-    const oaIdToPaper = new Map(works.map((w) => [oaId(w.id), w]))
+    const idToWork = new Map(works.map((w) => [w.id, w]))
     const papersMapped = withEmbeddings.map((p) => {
-      const work = oaIdToPaper.get(p.external_id)
+      const work = idToWork.get(p.external_id)
       return {
         id: randomUUID(),
         s2PaperId: p.external_id,
@@ -92,9 +104,11 @@ export async function POST(req: NextRequest) {
         authors: p.authors ?? [],
         year: p.year ?? 0,
         citationCount: p.citation_count,
-        referenceIds: work?.referenced_works?.map(oaId) ?? [],
-        s2Url: `https://openalex.org/${p.external_id}`,
-        venue: work?.primary_location?.source?.display_name ?? null,
+        referenceIds: work?.referencedWorkIds ?? [],
+        s2Url: provider === 'core'
+          ? `https://core.ac.uk/works/${p.external_id.replace('core:', '')}`
+          : `https://openalex.org/${p.external_id}`,
+        venue: work?.venue ?? null,
       }
     })
 
@@ -150,6 +164,8 @@ export async function POST(req: NextRequest) {
     await db.from('sessions').insert({
       id: sessionId,
       seed_topic: seedTopic,
+      data_source: provider,
+      last_seen_at: new Date().toISOString(),
       ...(authenticatedUserId ? { user_id: authenticatedUserId } : {}),
     })
 
@@ -309,6 +325,8 @@ export async function POST(req: NextRequest) {
       graph: fixedGraph,
       ai_available: labelResult.ai_available,
       ai_reason: labelResult.reason,
+      sourceProvider: provider,
+      queries,
     })
   } catch (err) {
     console.error('[session/create]', err)

@@ -33,6 +33,7 @@ export default function SessionProgress({ sessionId, topic, onRetry }: Props) {
     stageIndex: 0,
     stageTotal: 6,
   })
+  const [fetchSummary, setFetchSummary] = useState<string | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
@@ -43,7 +44,13 @@ export default function SessionProgress({ sessionId, topic, onRetry }: Props) {
         const res = await fetch(`/api/session/progress/${sessionId}`)
         if (res.ok) {
           const data: ProgressState = await res.json()
-          if (!stopped) setProgress(data)
+          if (!stopped) {
+            setProgress(data)
+            // Capture the fetching detail while it's active so we can show it after
+            if (data.stage === 'fetching' && data.detail) {
+              setFetchSummary(data.detail)
+            }
+          }
         }
       } catch {
         // ignore transient errors — keep polling
@@ -140,6 +147,9 @@ export default function SessionProgress({ sessionId, topic, onRetry }: Props) {
                       </span>
                       {isActive && progress.detail && (
                         <p className="text-xs text-blue-500 dark:text-blue-400 mt-0.5 font-mono">{progress.detail}</p>
+                      )}
+                      {!isActive && isDone && s.key === 'fetching' && fetchSummary && (
+                        <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 leading-snug line-clamp-2">{fetchSummary}</p>
                       )}
                     </div>
                   </li>

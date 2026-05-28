@@ -61,7 +61,8 @@ export default function SeedInput() {
       const data = await res.json()
 
       if (!res.ok || data.error) {
-        setError(data.error ?? 'Failed to create session')
+        const msg = data.error ?? 'Failed to create session'
+        setError(data.papersFound != null ? `${msg} (${data.papersFound} papers found)` : msg)
         setLoading(false)
         return
       }
@@ -76,6 +77,8 @@ export default function SeedInput() {
       sessionStorage.setItem(`nexus_seed_${data.sessionId}`, trimmed)
       sessionStorage.setItem(`nexus_ai_available_${data.sessionId}`, String(data.ai_available !== false))
       if (data.ai_reason) sessionStorage.setItem(`nexus_ai_reason_${data.sessionId}`, data.ai_reason)
+      if (data.sourceProvider) sessionStorage.setItem(`nexus_source_${data.sessionId}`, data.sourceProvider)
+      if (data.queries?.length) sessionStorage.setItem(`nexus_queries_${data.sessionId}`, JSON.stringify(data.queries))
       router.push(`/session/${data.sessionId}`)
     } catch {
       setError('Network error — please try again.')

@@ -14,6 +14,7 @@ interface SessionState {
   sessionId: string | null
   seedTopic: string
   sessionName: string
+  sourceProvider: 'openalex' | 'core' | null
   selectedNodeId: string | null
   depth: number
   layerToggles: LayerToggles
@@ -31,6 +32,7 @@ interface SessionState {
 interface SessionActions {
   setSession: (id: string, topic: string) => void
   setSessionName: (name: string) => void
+  setSourceProvider: (p: 'openalex' | 'core' | null) => void
   selectNode: (id: string | null) => void
   setDepth: (d: number) => void
   toggleLayer: (key: keyof LayerToggles) => void
@@ -61,6 +63,7 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
   sessionId: null,
   seedTopic: '',
   sessionName: 'Untitled Session',
+  sourceProvider: null,
   selectedNodeId: null,
   depth: 2,
   focusNodeId: null,
@@ -86,6 +89,8 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
     set({ sessionId: id, seedTopic: topic, sessionName: topic || 'Untitled Session' }),
 
   setSessionName: (name) => set({ sessionName: name }),
+
+  setSourceProvider: (p) => set({ sourceProvider: p }),
 
   selectNode: (id) => set({ selectedNodeId: id }),
 

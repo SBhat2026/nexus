@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { randomUUID } from 'crypto'
-import { fetchReferences, oaId } from '@/lib/openalex/client'
+import { fetchRefs } from '@/lib/sources/index'
 import { getPapersWithEmbeddings } from '@/lib/papers/cache'
 import { createServerClient } from '@/lib/supabase/server'
 import { runClusteringPipeline } from '@/lib/clustering/pipeline'
@@ -26,11 +26,16 @@ export async function POST(
       return Response.json({ error: 'sessionId and s2PaperId required' }, { status: 400 })
     }
 
-    // Fetch related works — 70% from last 3 years, 30% unconstrained
-    const relatedWorks = await fetchReferences(externalId, 60, { recentRatio: 0.7, recentYears: 3 })
-    const relatedIds = relatedWorks.map((w) => oaId(w.id))
-
     const db = createServerClient()
+
+    // Fetch the title of the source paper for CORE fallback topic search
+    const { data: sourcePaper } = await db.from('papers').select('title').eq('s2_paper_id', externalId).eq('session_id', sessionId).single()
+    const seedTitle = sourcePaper?.title ?? externalId
+
+    // Fetch related works — 70% from last 3 years, 30% unconstrained
+    const { works: relatedWorks } = await fetchRefs(externalId, seedTitle, 60, { recentRatio: 0.7, recentYears: 3 })
+    const relatedIds = relatedWorks.map((w) => w.id)
+
     const { data: existing } = await db.from('papers').select('s2_paper_id').eq('session_id', sessionId)
     const existingIds = new Set((existing ?? []).map((r: { s2_paper_id: string }) => r.s2_paper_id))
     const newIds = relatedIds.filter((id) => !existingIds.has(id))
@@ -165,15 +170,14 @@ export async function POST(
       })
     })
 
-    // Venue from the relatedWorks map (best effort — null if missing)
-    const oaIdToWork = new Map(relatedWorks.map((w) => [oaId(w.id), w]))
+    const idToWork = new Map(relatedWorks.map((w) => [w.id, w]))
 
     // Insert paper rows and build PaperNode objects
     const paperRows = withEmbeddings.map((p, i) => {
       const clusterIdx = pipeline.assignments[i]
       const clusterId = clusterIdx >= 0 ? `${clusterPrefix}-${clusterIdx}` : null
       const [umapX, umapY] = umapCoords[i] ?? [null, null]
-      const work = oaIdToWork.get(p.external_id)
+      const work = idToWork.get(p.external_id)
       return {
         id: randomUUID(),
         session_id: sessionId,
@@ -191,8 +195,10 @@ export async function POST(
           ? `${clusterPrefix}-${pipeline.nearestClusterIndex[i]}`
           : null,
         tldr: null,
-        s2_url: `https://openalex.org/${p.external_id}`,
-        venue: work?.primary_location?.source?.display_name ?? null,
+        s2_url: p.external_id.startsWith('core:')
+          ? `https://core.ac.uk/works/${p.external_id.replace('core:', '')}`
+          : `https://openalex.org/${p.external_id}`,
+        venue: work?.venue ?? null,
         umap_x: umapX as number | null,
         umap_y: umapY as number | null,
       }
