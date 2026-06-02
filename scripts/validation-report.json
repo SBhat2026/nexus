@@ -1,0 +1,1818 @@
+{
+  "seed": 20260602,
+  "perSide": 60,
+  "nPrompts": 100,
+  "nValid": 99,
+  "overall": {
+    "meanCoverage": {
+      "key": "meanCoverage",
+      "oldMean": 0.3012830721755091,
+      "newMean": 0.7712069806775856,
+      "delta": 0.46992390850207666,
+      "t": 20.406039539394236,
+      "df": 98,
+      "p": 4.636189633863922e-37,
+      "dz": 2.0508841396765884,
+      "wilcoxonZ": 8.638467200718509,
+      "wilcoxonP": 5.697220743403333e-18,
+      "winRate": 1
+    },
+    "onTopicRate": {
+      "key": "onTopicRate",
+      "oldMean": 0.2785187282837033,
+      "newMean": 0.7960379512809035,
+      "delta": 0.5175192229972,
+      "t": 19.079426213649693,
+      "df": 98,
+      "p": 9.063938942219252e-35,
+      "dz": 1.917554483816583,
+      "wilcoxonZ": 8.50990013507213,
+      "wilcoxonP": 1.7408321640170763e-17,
+      "winRate": 0.9494949494949495
+    },
+    "driftRate": {
+      "key": "driftRate",
+      "oldMean": 0.3564521677389603,
+      "newMean": 0.001505599732550087,
+      "delta": -0.3549465680064102,
+      "t": -15.902209595467633,
+      "df": 98,
+      "p": 6.79145729819845e-29,
+      "dz": -1.5982321989622867,
+      "wilcoxonZ": -8.551203244168445,
+      "wilcoxonP": 1.21811904923744e-17,
+      "winRate": 0.9797979797979798
+    }
+  },
+  "byBucket": {
+    "broad": {
+      "meanCoverage": {
+        "key": "meanCoverage",
+        "oldMean": 0.34946573323507735,
+        "newMean": 0.9833333333333334,
+        "delta": 0.633867600098256,
+        "t": 17.46496374735216,
+        "df": 22,
+        "p": 2.217589972281414e-14,
+        "dz": 3.641696682307189,
+        "wilcoxonZ": 4.197263546240068,
+        "wilcoxonP": 0.00002701595032438969,
+        "winRate": 1
+      },
+      "driftRate": {
+        "key": "driftRate",
+        "oldMean": 0.5735323016457873,
+        "newMean": 0,
+        "delta": -0.5735323016457873,
+        "t": -17.261643564195264,
+        "df": 22,
+        "p": 2.8214292955761363e-14,
+        "dz": -3.599301493450251,
+        "wilcoxonZ": -4.197263546240068,
+        "wilcoxonP": 0.00002701595032438969,
+        "winRate": 1
+      }
+    },
+    "medium": {
+      "meanCoverage": {
+        "key": "meanCoverage",
+        "oldMean": 0.30439731990832475,
+        "newMean": 0.8603594505552897,
+        "delta": 0.5559621306469653,
+        "t": 23.4529690305349,
+        "df": 40,
+        "p": 5.447980221112951e-25,
+        "dz": 3.6627384009556097,
+        "wilcoxonZ": 5.578573467089131,
+        "wilcoxonP": 2.4249903790582494e-8,
+        "winRate": 1
+      },
+      "driftRate": {
+        "key": "driftRate",
+        "oldMean": 0.3820629784322391,
+        "newMean": 0.0016260162601626016,
+        "delta": -0.38043696217207645,
+        "t": -12.99133914708734,
+        "df": 40,
+        "p": 6.160229164054917e-16,
+        "dz": -2.028906306571345,
+        "wilcoxonZ": -5.578573467089131,
+        "wilcoxonP": 2.4249903790582494e-8,
+        "winRate": 1
+      }
+    },
+    "specific": {
+      "meanCoverage": {
+        "key": "meanCoverage",
+        "oldMean": 0.26597206184935146,
+        "newMean": 0.5273739127899271,
+        "delta": 0.2614018509405755,
+        "t": 8.545451663893447,
+        "df": 34,
+        "p": 5.552254545183781e-10,
+        "dz": 1.4444449664632855,
+        "wilcoxonZ": 5.159430037306365,
+        "wilcoxonP": 2.4770275711163367e-7,
+        "winRate": 1
+      },
+      "driftRate": {
+        "key": "driftRate",
+        "oldMean": 0.18379827293091902,
+        "newMean": 0.002353934481594056,
+        "delta": -0.18144433844932495,
+        "t": -7.538104486115916,
+        "df": 34,
+        "p": 9.412353740627967e-9,
+        "dz": -1.2741722158057969,
+        "wilcoxonZ": -5.011926075380066,
+        "wilcoxonP": 5.388790668882137e-7,
+        "winRate": 0.9428571428571428
+      }
+    }
+  },
+  "rows": [
+    {
+      "prompt": "physics informed neural networks for partial differential equations",
+      "bucket": "specific",
+      "nTok": 7,
+      "old": {
+        "meanCoverage": 0.36666666666666675,
+        "onTopicRate": 0.38333333333333336,
+        "driftRate": 0.3,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.8357142857142856,
+        "onTopicRate": 0.85,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "federated learning",
+      "bucket": "broad",
+      "nTok": 2,
+      "old": {
+        "meanCoverage": 0.43333333333333335,
+        "onTopicRate": 0.48333333333333334,
+        "driftRate": 0.5166666666666667,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 1,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "CRISPR base editing off-target effects",
+      "bucket": "medium",
+      "nTok": 5,
+      "old": {
+        "meanCoverage": 0.4500000000000001,
+        "onTopicRate": 0.5166666666666667,
+        "driftRate": 0.16666666666666666,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.6933333333333332,
+        "onTopicRate": 0.7833333333333333,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "superconductivity",
+      "bucket": "broad",
+      "nTok": 1,
+      "old": {
+        "meanCoverage": 0.7,
+        "onTopicRate": 0.7,
+        "driftRate": 0.3,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 1,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "graph contrastive learning for molecular property prediction with limited labeled data",
+      "bucket": "specific",
+      "nTok": 9,
+      "old": {
+        "meanCoverage": 0.19774011299435018,
+        "onTopicRate": 0.01694915254237288,
+        "driftRate": 0.13559322033898305,
+        "n": 59
+      },
+      "new": {
+        "meanCoverage": 0.49176954732510303,
+        "onTopicRate": 0.4444444444444444,
+        "driftRate": 0,
+        "n": 54
+      }
+    },
+    {
+      "prompt": "differential privacy guarantees for federated learning under non-iid client data distributions",
+      "bucket": "specific",
+      "nTok": 11,
+      "old": {
+        "meanCoverage": 0.4015151515151515,
+        "onTopicRate": 0.23333333333333334,
+        "driftRate": 0.03333333333333333,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.5661881977671452,
+        "onTopicRate": 0.5087719298245614,
+        "driftRate": 0,
+        "n": 57
+      }
+    },
+    {
+      "prompt": "diffusion model guided inverse design of mechanical metamaterials with target stiffness",
+      "bucket": "specific",
+      "nTok": 9,
+      "old": {
+        "meanCoverage": 0.1999999999999999,
+        "onTopicRate": 0.03333333333333333,
+        "driftRate": 0.15,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.35111111111111115,
+        "onTopicRate": 0.1,
+        "driftRate": 0,
+        "n": 50
+      }
+    },
+    {
+      "prompt": "natural language inference",
+      "bucket": "medium",
+      "nTok": 3,
+      "old": {
+        "meanCoverage": 0.17777777777777778,
+        "onTopicRate": 0.16666666666666666,
+        "driftRate": 0.6833333333333333,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.9388888888888889,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "long context state space models for genomic sequence modeling at base pair resolution",
+      "bucket": "specific",
+      "nTok": 11,
+      "old": {
+        "meanCoverage": 0.14166666666666664,
+        "onTopicRate": 0.03333333333333333,
+        "driftRate": 0.23333333333333334,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.3773584905660378,
+        "onTopicRate": 0.2641509433962264,
+        "driftRate": 0,
+        "n": 53
+      }
+    },
+    {
+      "prompt": "graph neural networks for drug discovery",
+      "bucket": "medium",
+      "nTok": 5,
+      "old": {
+        "meanCoverage": 0.14915254237288136,
+        "onTopicRate": 0.03389830508474576,
+        "driftRate": 0.5423728813559322,
+        "n": 59
+      },
+      "new": {
+        "meanCoverage": 0.7733333333333337,
+        "onTopicRate": 0.85,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "mixture of experts routing for efficient inference in sparse large language models",
+      "bucket": "specific",
+      "nTok": 9,
+      "old": {
+        "meanCoverage": 0.1055555555555555,
+        "onTopicRate": 0,
+        "driftRate": 0.31666666666666665,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.5481481481481478,
+        "onTopicRate": 0.4,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "deep reinforcement learning for autonomous driving policy",
+      "bucket": "specific",
+      "nTok": 6,
+      "old": {
+        "meanCoverage": 0.20833333333333337,
+        "onTopicRate": 0.15,
+        "driftRate": 0.31666666666666665,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.836111111111111,
+        "onTopicRate": 0.9333333333333333,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "deep generative weather nowcasting outperforms numerical models for short term precipitation",
+      "bucket": "specific",
+      "nTok": 10,
+      "old": {
+        "meanCoverage": 0.3899999999999999,
+        "onTopicRate": 0.3,
+        "driftRate": 0,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.5108695652173914,
+        "onTopicRate": 0.5434782608695652,
+        "driftRate": 0,
+        "n": 46
+      }
+    },
+    {
+      "prompt": "attention based neural machine translation",
+      "bucket": "medium",
+      "nTok": 4,
+      "old": {
+        "meanCoverage": 0.15517241379310345,
+        "onTopicRate": 0.10344827586206896,
+        "driftRate": 0.5172413793103449,
+        "n": 58
+      },
+      "new": {
+        "meanCoverage": 0.8875,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "bayesian optimization of perovskite solar cell composition for improved power conversion efficiency",
+      "bucket": "specific",
+      "nTok": 10,
+      "old": {
+        "meanCoverage": 0.1733333333333333,
+        "onTopicRate": 0.08333333333333333,
+        "driftRate": 0.31666666666666665,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.5372549019607843,
+        "onTopicRate": 0.6470588235294118,
+        "driftRate": 0,
+        "n": 51
+      }
+    },
+    {
+      "prompt": "climate tipping points ice sheet collapse",
+      "bucket": "specific",
+      "nTok": 6,
+      "old": {
+        "meanCoverage": 0.26666666666666666,
+        "onTopicRate": 0.23333333333333334,
+        "driftRate": 0.2,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.7722222222222223,
+        "onTopicRate": 0.85,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "retrieval augmented generation for question answering",
+      "bucket": "medium",
+      "nTok": 5,
+      "old": {
+        "meanCoverage": 0.10333333333333335,
+        "onTopicRate": 0.03333333333333333,
+        "driftRate": 0.6333333333333333,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.728,
+        "onTopicRate": 0.96,
+        "driftRate": 0,
+        "n": 25
+      }
+    },
+    {
+      "prompt": "neural architecture search",
+      "bucket": "medium",
+      "nTok": 3,
+      "old": {
+        "meanCoverage": 0.23563218390804597,
+        "onTopicRate": 0.1724137931034483,
+        "driftRate": 0.5344827586206896,
+        "n": 58
+      },
+      "new": {
+        "meanCoverage": 0.9666666666666667,
+        "onTopicRate": 0.9833333333333333,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "explainable ai feature attribution methods",
+      "bucket": "medium",
+      "nTok": 4,
+      "old": {
+        "meanCoverage": 0.07203389830508475,
+        "onTopicRate": 0.01694915254237288,
+        "driftRate": 0.7288135593220338,
+        "n": 59
+      },
+      "new": {
+        "meanCoverage": 0.7583333333333333,
+        "onTopicRate": 0.9166666666666666,
+        "driftRate": 0.03333333333333333,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "variational quantum eigensolver for ground state energy of small molecules on noisy hardware",
+      "bucket": "specific",
+      "nTok": 10,
+      "old": {
+        "meanCoverage": 0.3433333333333333,
+        "onTopicRate": 0.25,
+        "driftRate": 0,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.5394736842105263,
+        "onTopicRate": 0.631578947368421,
+        "driftRate": 0,
+        "n": 38
+      }
+    },
+    {
+      "prompt": "gravitational waves",
+      "bucket": "broad",
+      "nTok": 2,
+      "old": {
+        "meanCoverage": 0.4152542372881356,
+        "onTopicRate": 0.559322033898305,
+        "driftRate": 0.4406779661016949,
+        "n": 59
+      },
+      "new": {
+        "meanCoverage": 0.8666666666666667,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "topological insulators",
+      "bucket": "broad",
+      "nTok": 2,
+      "old": {
+        "meanCoverage": 0.6083333333333333,
+        "onTopicRate": 0.65,
+        "driftRate": 0.35,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 1,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "attention guided weakly supervised segmentation of tumors in whole slide pathology images",
+      "bucket": "specific",
+      "nTok": 10,
+      "old": {
+        "meanCoverage": 0.2316666666666666,
+        "onTopicRate": 0.1,
+        "driftRate": 0.15,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.368888888888889,
+        "onTopicRate": 0.24444444444444444,
+        "driftRate": 0.044444444444444446,
+        "n": 45
+      }
+    },
+    {
+      "prompt": "spiking neural networks neuromorphic hardware",
+      "bucket": "medium",
+      "nTok": 5,
+      "old": {
+        "meanCoverage": 0.6,
+        "onTopicRate": 0.6666666666666666,
+        "driftRate": 0.03333333333333333,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.7966666666666667,
+        "onTopicRate": 0.8166666666666667,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "graph neural networks",
+      "bucket": "medium",
+      "nTok": 3,
+      "old": {
+        "meanCoverage": 0.3277777777777778,
+        "onTopicRate": 0.35,
+        "driftRate": 0.5,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.95,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "transformer based decoding of motor cortex activity for brain computer interface cursor control",
+      "bucket": "specific",
+      "nTok": 10,
+      "old": {
+        "meanCoverage": 0.36833333333333335,
+        "onTopicRate": 0.36666666666666664,
+        "driftRate": 0.1,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.442857142857143,
+        "onTopicRate": 0.46938775510204084,
+        "driftRate": 0,
+        "n": 49
+      }
+    },
+    {
+      "prompt": "battery materials",
+      "bucket": "broad",
+      "nTok": 2,
+      "old": {
+        "meanCoverage": 0.375,
+        "onTopicRate": 0.6,
+        "driftRate": 0.4,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.8833333333333333,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "self-supervised contrastive pretraining for chest x-ray disease classification with limited labels",
+      "bucket": "specific",
+      "nTok": 10,
+      "old": {
+        "meanCoverage": 0.22,
+        "onTopicRate": 0.1,
+        "driftRate": 0.21666666666666667,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.45777777777777795,
+        "onTopicRate": 0.5333333333333333,
+        "driftRate": 0,
+        "n": 45
+      }
+    },
+    {
+      "prompt": "self supervised denoising of cryo electron microscopy images for protein structure determination",
+      "bucket": "specific",
+      "nTok": 10,
+      "old": {
+        "meanCoverage": 0.33999999999999997,
+        "onTopicRate": 0.31666666666666665,
+        "driftRate": 0.1,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.5219512195121951,
+        "onTopicRate": 0.4634146341463415,
+        "driftRate": 0,
+        "n": 41
+      }
+    },
+    {
+      "prompt": "self-supervised learning for medical imaging",
+      "bucket": "medium",
+      "nTok": 5,
+      "old": {
+        "meanCoverage": 0.17288135593220338,
+        "onTopicRate": 0.05084745762711865,
+        "driftRate": 0.3728813559322034,
+        "n": 59
+      },
+      "new": {
+        "meanCoverage": 0.7300000000000002,
+        "onTopicRate": 0.8333333333333334,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "graph transformers molecular property prediction",
+      "bucket": "medium",
+      "nTok": 5,
+      "old": {
+        "meanCoverage": 0.1898305084745762,
+        "onTopicRate": 0.13559322033898305,
+        "driftRate": 0.4576271186440678,
+        "n": 59
+      },
+      "new": {
+        "meanCoverage": 0.8233333333333334,
+        "onTopicRate": 0.85,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "attention head pruning to compress transformer language models without accuracy loss",
+      "bucket": "specific",
+      "nTok": 9,
+      "old": {
+        "meanCoverage": 0.2448210922787193,
+        "onTopicRate": 0.06779661016949153,
+        "driftRate": 0.1016949152542373,
+        "n": 59
+      },
+      "new": {
+        "meanCoverage": 0.5531914893617021,
+        "onTopicRate": 0.6170212765957447,
+        "driftRate": 0,
+        "n": 47
+      }
+    },
+    {
+      "prompt": "neural ordinary differential equations",
+      "bucket": "medium",
+      "nTok": 4,
+      "old": {
+        "meanCoverage": 0.11666666666666667,
+        "onTopicRate": 0.13333333333333333,
+        "driftRate": 0.7833333333333333,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.9362745098039216,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 51
+      }
+    },
+    {
+      "prompt": "photonic crystals",
+      "bucket": "broad",
+      "nTok": 2,
+      "old": {
+        "meanCoverage": 0.4491525423728814,
+        "onTopicRate": 0.5254237288135594,
+        "driftRate": 0.4745762711864407,
+        "n": 59
+      },
+      "new": {
+        "meanCoverage": 1,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "single-cell RNA sequencing",
+      "bucket": "medium",
+      "nTok": 4,
+      "old": {
+        "meanCoverage": 0.3875,
+        "onTopicRate": 0.5,
+        "driftRate": 0.18333333333333332,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.9375,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "diffusion models for protein design",
+      "bucket": "medium",
+      "nTok": 4,
+      "old": {
+        "meanCoverage": 0.17083333333333334,
+        "onTopicRate": 0.16666666666666666,
+        "driftRate": 0.5666666666666667,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.8333333333333334,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "speech recognition",
+      "bucket": "broad",
+      "nTok": 2,
+      "old": {
+        "meanCoverage": 0.3983050847457627,
+        "onTopicRate": 0.4406779661016949,
+        "driftRate": 0.559322033898305,
+        "n": 59
+      },
+      "new": {
+        "meanCoverage": 1,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "knowledge graphs",
+      "bucket": "broad",
+      "nTok": 2,
+      "old": {
+        "meanCoverage": 0.11666666666666667,
+        "onTopicRate": 0.21666666666666667,
+        "driftRate": 0.7833333333333333,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 1,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "graph neural network prediction of protein protein interaction binding affinity from structure",
+      "bucket": "specific",
+      "nTok": 9,
+      "old": {
+        "meanCoverage": 0.32962962962962955,
+        "onTopicRate": 0.18333333333333332,
+        "driftRate": 0.06666666666666667,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.798148148148148,
+        "onTopicRate": 0.8,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "transcriptomics tumor microenvironment immune cells",
+      "bucket": "medium",
+      "nTok": 5,
+      "old": {
+        "meanCoverage": 0.47999999999999976,
+        "onTopicRate": 0.43333333333333335,
+        "driftRate": 0.05,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.9166666666666664,
+        "onTopicRate": 0.9666666666666667,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "mRNA vaccines",
+      "bucket": "broad",
+      "nTok": 2,
+      "old": {
+        "meanCoverage": 0.30833333333333335,
+        "onTopicRate": 0.45,
+        "driftRate": 0.55,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.9083333333333333,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "protein language model embeddings improve remote homology detection over hidden markov models",
+      "bucket": "specific",
+      "nTok": 11,
+      "old": {
+        "meanCoverage": 0.2883333333333334,
+        "onTopicRate": 0.23333333333333334,
+        "driftRate": 0.05,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.30625000000000013,
+        "onTopicRate": 0.020833333333333332,
+        "driftRate": 0,
+        "n": 48
+      }
+    },
+    {
+      "prompt": "density functional theory",
+      "bucket": "medium",
+      "nTok": 3,
+      "old": {
+        "meanCoverage": 0.4777777777777777,
+        "onTopicRate": 0.4666666666666667,
+        "driftRate": 0.43333333333333335,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.9611111111111111,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "optimal transport alignment of single cell multi-omics across tissue samples and donors",
+      "bucket": "specific",
+      "nTok": 10,
+      "old": {
+        "meanCoverage": 0.19333333333333327,
+        "onTopicRate": 0.08333333333333333,
+        "driftRate": 0.2,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.30212765957446824,
+        "onTopicRate": 0.0425531914893617,
+        "driftRate": 0,
+        "n": 47
+      }
+    },
+    {
+      "prompt": "spintronics",
+      "bucket": "broad",
+      "nTok": 1,
+      "old": {
+        "meanCoverage": 0.6,
+        "onTopicRate": 0.6,
+        "driftRate": 0.4,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 1,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "metal organic frameworks gas separation",
+      "bucket": "medium",
+      "nTok": 5,
+      "old": {
+        "meanCoverage": 0.28666666666666657,
+        "onTopicRate": 0.23333333333333334,
+        "driftRate": 0.4666666666666667,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.8600000000000001,
+        "onTopicRate": 0.9666666666666667,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "transformer attention head pruning",
+      "bucket": "medium",
+      "nTok": 4,
+      "old": {
+        "meanCoverage": 0.1864406779661017,
+        "onTopicRate": 0.2033898305084746,
+        "driftRate": 0.576271186440678,
+        "n": 59
+      },
+      "new": {
+        "meanCoverage": 0.775,
+        "onTopicRate": 0.9833333333333333,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "antimicrobial resistance",
+      "bucket": "broad",
+      "nTok": 2,
+      "old": {
+        "meanCoverage": 0.375,
+        "onTopicRate": 0.45,
+        "driftRate": 0.55,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 1,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "multimodal foundation models aligning histopathology images with diagnostic text reports",
+      "bucket": "specific",
+      "nTok": 9,
+      "old": {
+        "meanCoverage": 0.23888888888888887,
+        "onTopicRate": 0.06666666666666667,
+        "driftRate": 0.1,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.3832199546485259,
+        "onTopicRate": 0.1836734693877551,
+        "driftRate": 0,
+        "n": 49
+      }
+    },
+    {
+      "prompt": "gut microbiome",
+      "bucket": "broad",
+      "nTok": 2,
+      "old": {
+        "meanCoverage": 0.4166666666666667,
+        "onTopicRate": 0.5333333333333333,
+        "driftRate": 0.4666666666666667,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.9833333333333333,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "optimal transport",
+      "bucket": "broad",
+      "nTok": 2,
+      "old": {
+        "meanCoverage": 0.10833333333333334,
+        "onTopicRate": 0.16666666666666666,
+        "driftRate": 0.8333333333333334,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 1,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "federated transfer learning for cross hospital sepsis prediction without sharing patient data",
+      "bucket": "specific",
+      "nTok": 10,
+      "old": {
+        "meanCoverage": 0.345,
+        "onTopicRate": 0.25,
+        "driftRate": 0.03333333333333333,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.4038461538461539,
+        "onTopicRate": 0.25,
+        "driftRate": 0,
+        "n": 52
+      }
+    },
+    {
+      "prompt": "neural radiance fields scene reconstruction",
+      "bucket": "medium",
+      "nTok": 5,
+      "old": {
+        "meanCoverage": 0.3866666666666665,
+        "onTopicRate": 0.31666666666666665,
+        "driftRate": 0.25,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.9866666666666667,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 15
+      }
+    },
+    {
+      "prompt": "retrieval augmented generation reduces hallucination in open domain biomedical question answering",
+      "bucket": "specific",
+      "nTok": 10,
+      "old": {
+        "meanCoverage": 0.2133333333333333,
+        "onTopicRate": 0.16666666666666666,
+        "driftRate": 0.25,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.41914893617021265,
+        "onTopicRate": 0.3404255319148936,
+        "driftRate": 0.02127659574468085,
+        "n": 47
+      }
+    },
+    {
+      "prompt": "recommender systems",
+      "bucket": "broad",
+      "nTok": 2,
+      "old": {
+        "meanCoverage": 0.10833333333333334,
+        "onTopicRate": 0.2,
+        "driftRate": 0.8,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 1,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "topological data analysis of neural activity",
+      "bucket": "medium",
+      "nTok": 4,
+      "old": {
+        "meanCoverage": 0.20416666666666666,
+        "onTopicRate": 0.18333333333333332,
+        "driftRate": 0.4,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.8041666666666667,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "spiking neural network training with surrogate gradients on neuromorphic edge devices",
+      "bucket": "specific",
+      "nTok": 9,
+      "old": {
+        "meanCoverage": 0.46296296296296285,
+        "onTopicRate": 0.43333333333333335,
+        "driftRate": 0.06666666666666667,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.5054466230936818,
+        "onTopicRate": 0.39215686274509803,
+        "driftRate": 0,
+        "n": 51
+      }
+    },
+    {
+      "prompt": "diffusion models",
+      "bucket": "broad",
+      "nTok": 2,
+      "old": {
+        "meanCoverage": 0.35,
+        "onTopicRate": 0.48333333333333334,
+        "driftRate": 0.5166666666666667,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 1,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "continual learning catastrophic forgetting",
+      "bucket": "medium",
+      "nTok": 4,
+      "old": {
+        "meanCoverage": 0.3516949152542373,
+        "onTopicRate": 0.288135593220339,
+        "driftRate": 0.3050847457627119,
+        "n": 59
+      },
+      "new": {
+        "meanCoverage": 0.8657407407407407,
+        "onTopicRate": 0.9259259259259259,
+        "driftRate": 0,
+        "n": 54
+      }
+    },
+    {
+      "prompt": "quantum machine learning variational circuits",
+      "bucket": "medium",
+      "nTok": 5,
+      "old": {
+        "meanCoverage": 0.23389830508474563,
+        "onTopicRate": 0.15254237288135594,
+        "driftRate": 0.3728813559322034,
+        "n": 59
+      },
+      "new": {
+        "meanCoverage": 0.7966666666666669,
+        "onTopicRate": 0.8333333333333334,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "CRISPR Cas9 base editing reduces off-target mutations in human hematopoietic stem cells",
+      "bucket": "specific",
+      "nTok": 12,
+      "old": {
+        "meanCoverage": 0.41111111111111115,
+        "onTopicRate": 0.43333333333333335,
+        "driftRate": 0.03333333333333333,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.5408496732026143,
+        "onTopicRate": 0.5686274509803921,
+        "driftRate": 0,
+        "n": 51
+      }
+    },
+    {
+      "prompt": "large language models",
+      "bucket": "medium",
+      "nTok": 3,
+      "old": {
+        "meanCoverage": 0.2833333333333334,
+        "onTopicRate": 0.16666666666666666,
+        "driftRate": 0.36666666666666664,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.9722222222222222,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "anomaly detection",
+      "bucket": "broad",
+      "nTok": 2,
+      "old": {
+        "meanCoverage": 0.11666666666666667,
+        "onTopicRate": 0.18333333333333332,
+        "driftRate": 0.8166666666666667,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 1,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "neural radiance fields with depth supervision for sparse view indoor scene reconstruction",
+      "bucket": "specific",
+      "nTok": 10,
+      "old": {
+        "meanCoverage": 0.25999999999999995,
+        "onTopicRate": 0.2,
+        "driftRate": 0.16666666666666666,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.48695652173913045,
+        "onTopicRate": 0.6086956521739131,
+        "driftRate": 0,
+        "n": 46
+      }
+    },
+    {
+      "prompt": "differential privacy in federated learning",
+      "bucket": "medium",
+      "nTok": 4,
+      "old": {
+        "meanCoverage": 0.4375,
+        "onTopicRate": 0.48333333333333334,
+        "driftRate": 0.18333333333333332,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.9125,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "electrocatalysis hydrogen evolution reaction",
+      "bucket": "medium",
+      "nTok": 4,
+      "old": {
+        "meanCoverage": 0.5125,
+        "onTopicRate": 0.6333333333333333,
+        "driftRate": 0.18333333333333332,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.9416666666666667,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "reinforcement learning",
+      "bucket": "broad",
+      "nTok": 2,
+      "old": {
+        "meanCoverage": 0.3416666666666667,
+        "onTopicRate": 0.45,
+        "driftRate": 0.55,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 1,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "attention mechanisms",
+      "bucket": "broad",
+      "nTok": 2,
+      "old": {
+        "meanCoverage": 0.23333333333333334,
+        "onTopicRate": 0.2833333333333333,
+        "driftRate": 0.7166666666666667,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.975,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "contrastive learning of speech representations",
+      "bucket": "medium",
+      "nTok": 4,
+      "old": {
+        "meanCoverage": 0.1864406779661017,
+        "onTopicRate": 0.1694915254237288,
+        "driftRate": 0.4406779661016949,
+        "n": 59
+      },
+      "new": {
+        "meanCoverage": 0.7208333333333333,
+        "onTopicRate": 0.9333333333333333,
+        "driftRate": 0.03333333333333333,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "optimal transport for single-cell trajectory inference",
+      "bucket": "specific",
+      "nTok": 6,
+      "old": {
+        "meanCoverage": 0.08055555555555555,
+        "onTopicRate": 0.016666666666666666,
+        "driftRate": 0.7,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.6638888888888891,
+        "onTopicRate": 0.75,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "deep learning weather forecasting nowcasting",
+      "bucket": "medium",
+      "nTok": 5,
+      "old": {
+        "meanCoverage": 0.3833333333333332,
+        "onTopicRate": 0.3,
+        "driftRate": 0.15,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.8533333333333332,
+        "onTopicRate": 0.8333333333333334,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "perovskite solar cells",
+      "bucket": "medium",
+      "nTok": 3,
+      "old": {
+        "meanCoverage": 0.8944444444444444,
+        "onTopicRate": 0.9,
+        "driftRate": 0.08333333333333333,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.9888888888888889,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "reinforcement learning for inventory management under stochastic demand and lead times",
+      "bucket": "specific",
+      "nTok": 9,
+      "old": {
+        "meanCoverage": 0.18703703703703697,
+        "onTopicRate": 0.1,
+        "driftRate": 0.3333333333333333,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.5171717171717172,
+        "onTopicRate": 0.45454545454545453,
+        "driftRate": 0,
+        "n": 55
+      }
+    },
+    {
+      "prompt": "generative adversarial networks for image synthesis",
+      "bucket": "medium",
+      "nTok": 5,
+      "old": {
+        "meanCoverage": 0.2915254237288134,
+        "onTopicRate": 0.2033898305084746,
+        "driftRate": 0.3050847457627119,
+        "n": 59
+      },
+      "new": {
+        "meanCoverage": 0.8800000000000002,
+        "onTopicRate": 0.9833333333333333,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "CAR T cell therapy",
+      "bucket": "medium",
+      "nTok": 3,
+      "old": {
+        "meanCoverage": 0.17777777777777778,
+        "onTopicRate": 0.1,
+        "driftRate": 0.6166666666666667,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.9777777777777777,
+        "onTopicRate": 0.9833333333333333,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "multimodal vision language pretraining",
+      "bucket": "medium",
+      "nTok": 4,
+      "old": {
+        "meanCoverage": 0.2288135593220339,
+        "onTopicRate": 0.2711864406779661,
+        "driftRate": 0.4915254237288136,
+        "n": 59
+      },
+      "new": {
+        "meanCoverage": 0.8458333333333333,
+        "onTopicRate": 0.9833333333333333,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "protein language models structure prediction",
+      "bucket": "medium",
+      "nTok": 5,
+      "old": {
+        "meanCoverage": 0.27333333333333326,
+        "onTopicRate": 0.18333333333333332,
+        "driftRate": 0.2833333333333333,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.8433333333333334,
+        "onTopicRate": 0.8666666666666667,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "protein structure prediction with alphafold",
+      "bucket": "medium",
+      "nTok": 4,
+      "old": {
+        "meanCoverage": 0.5041666666666667,
+        "onTopicRate": 0.6,
+        "driftRate": 0.23333333333333334,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.8375,
+        "onTopicRate": 0.9833333333333333,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "graph clustering",
+      "bucket": "broad",
+      "nTok": 2,
+      "old": {
+        "meanCoverage": 0.13333333333333333,
+        "onTopicRate": 0.18333333333333332,
+        "driftRate": 0.8166666666666667,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 1,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "dark matter",
+      "bucket": "broad",
+      "nTok": 2,
+      "old": {
+        "meanCoverage": 0.35,
+        "onTopicRate": 0.38333333333333336,
+        "driftRate": 0.6166666666666667,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 1,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "mixture of experts language model routing",
+      "bucket": "medium",
+      "nTok": 5,
+      "old": {
+        "meanCoverage": 0.0966666666666667,
+        "onTopicRate": 0,
+        "driftRate": 0.5833333333333334,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.7499999999999997,
+        "onTopicRate": 0.8,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "diffusion probabilistic models for de novo small molecule generation with synthesizability constraints",
+      "bucket": "specific",
+      "nTok": 10,
+      "old": {
+        "meanCoverage": 0.19166666666666674,
+        "onTopicRate": 0.06666666666666667,
+        "driftRate": 0.25,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.29583333333333345,
+        "onTopicRate": 0.041666666666666664,
+        "driftRate": 0,
+        "n": 48
+      }
+    },
+    {
+      "prompt": "gut microbiome inflammatory bowel disease",
+      "bucket": "medium",
+      "nTok": 5,
+      "old": {
+        "meanCoverage": 0.38999999999999974,
+        "onTopicRate": 0.2833333333333333,
+        "driftRate": 0.15,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.8566666666666668,
+        "onTopicRate": 0.8833333333333333,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "molecular dynamics simulation",
+      "bucket": "medium",
+      "nTok": 3,
+      "old": {
+        "meanCoverage": 0.48333333333333317,
+        "onTopicRate": 0.45,
+        "driftRate": 0.26666666666666666,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.8777777777777775,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "topological superconductivity in proximitized semiconductor nanowires for majorana zero modes",
+      "bucket": "specific",
+      "nTok": 8,
+      "old": {
+        "meanCoverage": 0.4353448275862069,
+        "onTopicRate": 0.5172413793103449,
+        "driftRate": 0.06896551724137931,
+        "n": 58
+      },
+      "new": {
+        "meanCoverage": 0.5476190476190477,
+        "onTopicRate": 0.5952380952380952,
+        "driftRate": 0,
+        "n": 42
+      }
+    },
+    {
+      "prompt": "CRISPR",
+      "bucket": "broad",
+      "nTok": 1,
+      "old": {
+        "meanCoverage": 0.5,
+        "onTopicRate": 0.5,
+        "driftRate": 0.5,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 1,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "reinforcement learning for robotic manipulation",
+      "bucket": "medium",
+      "nTok": 4,
+      "old": {
+        "meanCoverage": 0.2754237288135593,
+        "onTopicRate": 0.288135593220339,
+        "driftRate": 0.3389830508474576,
+        "n": 59
+      },
+      "new": {
+        "meanCoverage": 0.7708333333333334,
+        "onTopicRate": 0.9833333333333333,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "CRISPR screening functional genomics",
+      "bucket": "medium",
+      "nTok": 4,
+      "old": {
+        "meanCoverage": 0.2625,
+        "onTopicRate": 0.3333333333333333,
+        "driftRate": 0.31666666666666665,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.8291666666666667,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "topological persistent homology features for characterizing loss landscape flatness in deep networks",
+      "bucket": "specific",
+      "nTok": 10,
+      "old": {
+        "meanCoverage": 0.20212765957446807,
+        "onTopicRate": 0.1276595744680851,
+        "driftRate": 0.2978723404255319,
+        "n": 47
+      },
+      "new": {
+        "meanCoverage": 0.3355555555555556,
+        "onTopicRate": 0.15555555555555556,
+        "driftRate": 0,
+        "n": 45
+      }
+    },
+    {
+      "prompt": "vision transformers image classification",
+      "bucket": "medium",
+      "nTok": 4,
+      "old": {
+        "meanCoverage": 0.3855932203389831,
+        "onTopicRate": 0.4067796610169492,
+        "driftRate": 0.3220338983050847,
+        "n": 59
+      },
+      "new": {
+        "meanCoverage": 0.8916666666666667,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "time series forecasting",
+      "bucket": "medium",
+      "nTok": 3,
+      "old": {
+        "meanCoverage": 0.26666666666666666,
+        "onTopicRate": 0.21666666666666667,
+        "driftRate": 0.5333333333333333,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.9555555555555556,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "protein folding",
+      "bucket": "broad",
+      "nTok": 2,
+      "old": {
+        "meanCoverage": 0.19166666666666668,
+        "onTopicRate": 0.3,
+        "driftRate": 0.7,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 1,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "metal organic framework membranes for selective carbon dioxide capture from flue gas",
+      "bucket": "specific",
+      "nTok": 10,
+      "old": {
+        "meanCoverage": 0.2433333333333333,
+        "onTopicRate": 0.13333333333333333,
+        "driftRate": 0.16666666666666666,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.41162790697674423,
+        "onTopicRate": 0.32558139534883723,
+        "driftRate": 0,
+        "n": 43
+      }
+    },
+    {
+      "prompt": "surface code fault tolerant quantum computing",
+      "bucket": "specific",
+      "nTok": 6,
+      "old": {
+        "meanCoverage": 0.3694444444444445,
+        "onTopicRate": 0.31666666666666665,
+        "driftRate": 0.16666666666666666,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.8833333333333334,
+        "onTopicRate": 0.9333333333333333,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "object detection",
+      "bucket": "broad",
+      "nTok": 2,
+      "old": {
+        "meanCoverage": 0.4083333333333333,
+        "onTopicRate": 0.4666666666666667,
+        "driftRate": 0.5333333333333333,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 1,
+        "onTopicRate": 1,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "continual learning with elastic weight consolidation mitigates forgetting in sequential task streams",
+      "bucket": "specific",
+      "nTok": 10,
+      "old": {
+        "meanCoverage": 0.28666666666666657,
+        "onTopicRate": 0.21666666666666667,
+        "driftRate": 0.08333333333333333,
+        "n": 60
+      },
+      "new": {
+        "meanCoverage": 0.41395348837209306,
+        "onTopicRate": 0.4418604651162791,
+        "driftRate": 0,
+        "n": 43
+      }
+    },
+    {
+      "prompt": "state space models long sequence modeling",
+      "bucket": "specific",
+      "nTok": 6,
+      "old": {
+        "meanCoverage": 0.1728813559322034,
+        "onTopicRate": 0.03389830508474576,
+        "driftRate": 0.423728813559322,
+        "n": 59
+      },
+      "new": {
+        "meanCoverage": 0.8266666666666668,
+        "onTopicRate": 0.9333333333333333,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "meta learning few shot classification",
+      "bucket": "medium",
+      "nTok": 5,
+      "old": {
+        "meanCoverage": 0.23103448275862062,
+        "onTopicRate": 0.08620689655172414,
+        "driftRate": 0.25862068965517243,
+        "n": 58
+      },
+      "new": {
+        "meanCoverage": 0.8499999999999998,
+        "onTopicRate": 0.8666666666666667,
+        "driftRate": 0,
+        "n": 60
+      }
+    },
+    {
+      "prompt": "large scale contrastive language image pretraining",
+      "bucket": "specific",
+      "nTok": 6,
+      "old": {
+        "meanCoverage": 0.19774011299435024,
+        "onTopicRate": 0.11864406779661017,
+        "driftRate": 0.3050847457627119,
+        "n": 59
+      },
+      "new": {
+        "meanCoverage": 0.7055555555555555,
+        "onTopicRate": 0.7,
+        "driftRate": 0.016666666666666666,
+        "n": 60
+      }
+    }
+  ]
+}

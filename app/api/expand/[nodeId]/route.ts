@@ -123,7 +123,7 @@ export async function POST(
     }))
     let labelResult = { labels: [] as Awaited<ReturnType<typeof labelClustersGroq>>['labels'] }
     try {
-      const r = await labelClustersGroq(clusterInputs)
+      const r = await labelClustersGroq(clusterInputs, seedTitle)
       labelResult = r
     } catch (err) {
       console.warn('[expand/nodeId] Groq labeling failed, using generic labels:', err)

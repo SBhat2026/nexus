@@ -26,11 +26,15 @@ const ResponseSchema = z.array(z.object({
   field: z.string(),
 }))
 
-export async function labelClusters(clusters: ClusterInput[]): Promise<LabelResult> {
+export async function labelClusters(clusters: ClusterInput[], seedTopic?: string): Promise<LabelResult> {
   const client = getClient()
   if (!client || clusters.length === 0) {
     return { labels: [], ai_available: false, reason: 'error' }
   }
+
+  const topicContext = seedTopic?.trim()
+    ? `These papers were all retrieved for the research topic: "${seedTopic.trim()}". Use this to disambiguate terms (e.g. interpret "attention" or "transformer" in this topic's sense), but DESCRIBE each cluster's specific shared characteristic — do NOT just restate the topic.\n\n`
+    : ''
 
   const clusterText = clusters.map((c) => {
     const papers = c.papers.map((p, i) =>
@@ -39,7 +43,7 @@ export async function labelClusters(clusters: ClusterInput[]): Promise<LabelResu
     return `Cluster ${c.clusterIndex}:\n${papers}`
   }).join('\n\n')
 
-  const prompt = `You are labeling groups of academic papers that were clustered by semantic embedding similarity.
+  const prompt = `${topicContext}You are labeling groups of academic papers that were clustered by semantic embedding similarity.
 
 Your task is to identify the SPECIFIC SHARED CHARACTERISTIC that causes each group of papers to cluster together — the common methodology, algorithmic technique, biological system, experimental approach, or scientific question they share.
 

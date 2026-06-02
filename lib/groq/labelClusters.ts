@@ -19,11 +19,15 @@ const ResponseSchema = z.object({
   })),
 })
 
-export async function labelClustersGroq(clusters: ClusterInput[]): Promise<LabelResult> {
+export async function labelClustersGroq(clusters: ClusterInput[], seedTopic?: string): Promise<LabelResult> {
   const client = getGroqClient()
   if (!client || clusters.length === 0) {
     return { labels: [], ai_available: false, reason: 'error' }
   }
+
+  const topicContext = seedTopic?.trim()
+    ? `Context — these papers were retrieved for the topic "${seedTopic.trim()}". Disambiguate terms in that sense, but describe each cluster's specific shared thread; do NOT just restate the topic.\n\n`
+    : ''
 
   const clusterText = clusters.map((c) => {
     const papers = c.papers.map((p, i) =>
@@ -32,7 +36,7 @@ export async function labelClustersGroq(clusters: ClusterInput[]): Promise<Label
     return `Cluster ${c.clusterIndex}:\n${papers}`
   }).join('\n\n')
 
-  const prompt = `Label these groups of academic papers. Each group was formed by semantic embedding similarity. Identify the SPECIFIC SHARED CHARACTERISTIC — the common methodology, technique, biological system, or scientific question.
+  const prompt = `${topicContext}Label these groups of academic papers. Each group was formed by semantic embedding similarity. Identify the SPECIFIC SHARED CHARACTERISTIC — the common methodology, technique, biological system, or scientific question.
 
 Rules:
 - Describe WHAT THEY SHARE, not just the field

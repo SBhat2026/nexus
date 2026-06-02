@@ -234,8 +234,8 @@ export async function POST(req: NextRequest) {
     let labelResult: LabelResult = { labels: [], ai_available: false, reason: 'error' }
     try {
       labelResult = await Promise.any([
-        labelClusters(clusterInputs).then((r) => r.labels.length > 0 ? r : Promise.reject(new Error('empty'))),
-        labelClustersGroq(clusterInputs).then((r) => r.labels.length > 0 ? r : Promise.reject(new Error('empty'))),
+        labelClusters(clusterInputs, seedTopic).then((r) => r.labels.length > 0 ? r : Promise.reject(new Error('empty'))),
+        labelClustersGroq(clusterInputs, seedTopic).then((r) => r.labels.length > 0 ? r : Promise.reject(new Error('empty'))),
       ])
     } catch (err) {
       console.warn('[session/create] both labelers failed, using generic labels:', err)
