@@ -1,10 +1,13 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Send, X, ExternalLink, Loader2 } from 'lucide-react'
+import { Send, X, ExternalLink, Loader2, Wand2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import type { GraphNode, ClusterNode, DirectionNode } from '@/lib/types'
-import type { GraphData } from '@/lib/types'
+import type { GraphData, GraphEditAction, GraphEditResult } from '@/lib/types'
+import GraphEditPreview from './GraphEditPreview'
+
+const MAX_NODES = 50
 
 interface Message {
   role: 'user' | 'assistant'
@@ -14,6 +17,8 @@ interface Message {
     newTopic: string
     reason: string
   } | null
+  graphActions?: GraphEditAction[]
+  applied?: boolean
 }
 
 interface Props {
@@ -24,6 +29,7 @@ interface Props {
   prunedClusters: { id: string; label: string; reason: string }[]
   isDark?: boolean
   onDeselect?: () => void
+  onGraphEdit?: (result: GraphEditResult) => void
 }
 
 function labelFor(node: GraphNode): string {
@@ -50,12 +56,15 @@ export default function ChatBar({
   selectedNode,
   prunedClusters,
   onDeselect,
+  onGraphEdit,
 }: Props) {
   const router = useRouter()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [navigating, setNavigating] = useState<string | null>(null)
+  const [previewIdx, setPreviewIdx] = useState<number | null>(null)
+  const [applying, setApplying] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -142,7 +151,7 @@ export default function ChatBar({
       const data = await res.json()
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content: data.text ?? 'No response.', action: data.action ?? null },
+        { role: 'assistant', content: data.text ?? 'No response.', action: data.action ?? null, graphActions: (data.graphActions ?? []).slice(0, 3) },
       ])
     } catch {
       setMessages(prev => [
@@ -151,6 +160,55 @@ export default function ChatBar({
       ])
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function applyEdits(msgIdx: number, selected: GraphEditAction[]) {
+    if (applying) return
+    // Client guards mirror the server: at most 3 edits, respect the 50-node ceiling.
+    let actions = selected.slice(0, 3)
+    const currentNodes = graphNodes.length
+    let addsAllowed = Math.max(0, MAX_NODES - currentNodes)
+    actions = actions.filter((a) => {
+      if (a.type !== 'add_node') return true
+      if (addsAllowed <= 0) return false
+      addsAllowed--
+      return true
+    })
+    if (actions.length === 0) {
+      setMessages(prev => [...prev, { role: 'assistant', content: `Couldn’t apply — the session is at its ${MAX_NODES}-node limit.`, action: null }])
+      setPreviewIdx(null)
+      return
+    }
+
+    setApplying(true)
+    try {
+      const res = await fetch(`/api/session/${sessionId}/graph-edit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actions }),
+      })
+      if (!res.ok) {
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Couldn’t apply the changes — please try again.', action: null }])
+        return
+      }
+      const result = res.status === 200 ? (await res.json()) as GraphEditResult : null
+      if (result) {
+        onGraphEdit?.(result)
+        const applied = result.addedNodes.length + result.addedEdges.length + result.removedNodeIds.length + result.removedEdgeIds.length
+        const parts: string[] = []
+        if (applied > 0) parts.push(`Applied ${applied} change${applied === 1 ? '' : 's'}.`)
+        if (result.skipped.length) parts.push(`Skipped ${result.skipped.length} (${result.skipped.map(s => s.reason).join('; ')}).`)
+        setMessages(prev => {
+          const next = prev.map((m, i) => (i === msgIdx ? { ...m, applied: true } : m))
+          return [...next, { role: 'assistant', content: parts.join(' ') || 'No changes were applied.', action: null }]
+        })
+      }
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Network error applying changes.', action: null }])
+    } finally {
+      setApplying(false)
+      setPreviewIdx(null)
     }
   }
 
@@ -210,6 +268,21 @@ export default function ChatBar({
                 }`}
               >
                 {msg.content}
+                {msg.role === 'assistant' && (msg.graphActions?.length ?? 0) > 0 && (
+                  <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                    {msg.applied ? (
+                      <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">✓ Changes applied</span>
+                    ) : (
+                      <button
+                        onClick={() => setPreviewIdx(i)}
+                        className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 hover:text-blue-500 font-medium transition text-[11px]"
+                      >
+                        <Wand2 className="w-3 h-3 shrink-0" />
+                        <span>Review {msg.graphActions!.length} proposed change{msg.graphActions!.length === 1 ? '' : 's'}</span>
+                      </button>
+                    )}
+                  </div>
+                )}
                 {msg.role === 'assistant' && msg.action?.type === 'suggest_reframe' && (
                   <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
                     <p className="text-slate-500 dark:text-slate-400 mb-1.5 text-[11px]">{msg.action.reason}</p>
@@ -283,6 +356,16 @@ export default function ChatBar({
             : <Send className="w-3.5 h-3.5" />}
         </button>
       </div>
+
+      {previewIdx !== null && messages[previewIdx]?.graphActions && (
+        <GraphEditPreview
+          actions={messages[previewIdx].graphActions!}
+          nodes={graphNodes}
+          applying={applying}
+          onApply={(selected) => applyEdits(previewIdx, selected)}
+          onClose={() => setPreviewIdx(null)}
+        />
+      )}
     </div>
   )
 }

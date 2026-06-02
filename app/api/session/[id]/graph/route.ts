@@ -106,7 +106,16 @@ export async function GET(
       weight: e.weight,
     }))
 
-    return Response.json({ sessionId, seedTopic: sessionRes.data.seed_topic, graph: { nodes, edges }, readPaperIds })
+    return Response.json({
+      sessionId,
+      seedTopic: sessionRes.data.seed_topic,
+      graph: { nodes, edges },
+      readPaperIds,
+      // Curation state for client rehydration on reload / cross-device restore.
+      prunedClusterIds: [...prunedClusters],
+      pruneReasons: Object.fromEntries(pruneReasons),
+      flaggedNodeIds: [...flaggedNodes],
+    })
   } catch (err) {
     console.error('[session/graph]', err)
     return Response.json({ error: 'Internal error' }, { status: 500 })

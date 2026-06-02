@@ -90,6 +90,23 @@ export interface GraphData {
   edges: GraphEdge[]
 }
 
+// ─── AI co-pilot graph editing ─────────────────────────────────────────────
+// Structured, reviewable changes the LLM may propose. Always previewed before apply.
+export type GraphEditAction =
+  | { type: 'add_node'; nodeType: 'cluster'; label: string; description?: string; confidence: number; reason: string }
+  | { type: 'remove_node'; targetId: string; confidence: number; reason: string }
+  | { type: 'add_edge'; sourceId: string; targetId: string; edgeType?: EdgeType; confidence: number; reason: string }
+  | { type: 'remove_edge'; edgeId: string; confidence: number; reason: string }
+
+// Result of applying a batch of edits, returned by /api/session/[id]/graph-edit.
+export interface GraphEditResult {
+  addedNodes: GraphNode[]
+  addedEdges: GraphEdge[]
+  removedNodeIds: string[]
+  removedEdgeIds: string[]
+  skipped: { action: GraphEditAction; reason: string }[]
+}
+
 export interface LayerToggles {
   papers: boolean
   directions: boolean

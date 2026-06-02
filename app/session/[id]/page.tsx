@@ -14,6 +14,9 @@ import AuthButton from '@/components/AuthButton'
 import SignInModal from '@/components/SignInModal'
 import { createClient } from '@/lib/supabase/client'
 import { useSessionHeartbeat } from '@/hooks/useSessionHeartbeat'
+import { useGraphHistory, type GraphHistoryState } from '@/hooks/useGraphHistory'
+import HistoryPanel from '@/components/explorer/HistoryPanel'
+import { Undo2, Redo2, History as HistoryIcon } from 'lucide-react'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -47,6 +50,7 @@ export default function SessionPage({ params }: PageProps) {
   const [saving, setSaving] = useState(false)
   const [showSignInModal, setShowSignInModal] = useState(false)
   const [showGoDeepGate, setShowGoDeepGate] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   const startLeftResize = useCallback((e: React.PointerEvent) => {
     e.preventDefault()
@@ -116,6 +120,31 @@ export default function SessionPage({ params }: PageProps) {
     setStatus('loading')
     setLoadError(null)
 
+    // Rehydrate curation state from cached node flags (cache-hit path).
+    function seedCurationFromGraph(g: GraphData) {
+      const pset = new Set<string>()
+      const preasons = new Map<string, string>()
+      const fset = new Set<string>()
+      for (const n of g.nodes) {
+        if (n.nodeType === 'cluster' && (n as { isPruned?: boolean }).isPruned) {
+          pset.add(n.id)
+          const r = (n as { pruneReason?: string }).pruneReason
+          if (r) preasons.set(n.id, r)
+        }
+        if ((n as { isFlagged?: boolean }).isFlagged) fset.add(n.id)
+      }
+      setPruned(pset)
+      setPrunedReasons(preasons)
+      setFlagged(fset)
+    }
+
+    // Rehydrate from the authoritative DB arrays (API path).
+    function seedCurationFromArrays(prunedIds: string[], reasons: Record<string, string>, flaggedIds: string[]) {
+      setPruned(new Set(prunedIds))
+      setPrunedReasons(new Map(Object.entries(reasons)))
+      setFlagged(new Set(flaggedIds))
+    }
+
     async function load() {
       const topic = typeof window !== 'undefined'
         ? sessionStorage.getItem(`nexus_seed_${id}`) ?? ''
@@ -143,7 +172,13 @@ export default function SessionPage({ params }: PageProps) {
           setSeedTopic(topic)
           setSession(id, topic)
           setGraphData(cachedGraph)
+          seedCurationFromGraph(cachedGraph)
           setStatus('ready')
+          // Refresh read state from DB in the background (not carried in graph cache).
+          fetch(`/api/session/${id}/graph`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d) => { if (d && !cancelled && d.readPaperIds?.length) setReadPaperIds(d.readPaperIds) })
+            .catch(() => {})
           return
         }
       }
@@ -157,6 +192,7 @@ export default function SessionPage({ params }: PageProps) {
             setSeedTopic(topic)
             setSession(id, topic)
             setGraphData(cachedGraph)
+            seedCurationFromGraph(cachedGraph)
             setStatus('ready')
             return
           }
@@ -173,6 +209,11 @@ export default function SessionPage({ params }: PageProps) {
           setGraphData(data.graph)
           setStatus('ready')
           if (data.readPaperIds?.length) setReadPaperIds(data.readPaperIds)
+          seedCurationFromArrays(
+            data.prunedClusterIds ?? [],
+            data.pruneReasons ?? {},
+            data.flaggedNodeIds ?? [],
+          )
           sessionStorage.setItem(`nexus_graph_${id}`, JSON.stringify(data.graph))
           if (t) sessionStorage.setItem(`nexus_seed_${id}`, t)
         }
@@ -189,6 +230,34 @@ export default function SessionPage({ params }: PageProps) {
     return () => { cancelled = true }
   }, [id, setSession, retryCount])
 
+  // Multi-tab sync: when another tab writes the graph cache, adopt it here so the
+  // two tabs don't diverge. Last write wins; the DB remains the source of truth.
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if (e.key !== `nexus_graph_${id}` || !e.newValue) return
+      try {
+        const next = JSON.parse(e.newValue) as GraphData
+        setGraphData(next)
+        const pset = new Set<string>()
+        const preasons = new Map<string, string>()
+        const fset = new Set<string>()
+        for (const n of next.nodes) {
+          if (n.nodeType === 'cluster' && (n as { isPruned?: boolean }).isPruned) {
+            pset.add(n.id)
+            const r = (n as { pruneReason?: string }).pruneReason
+            if (r) preasons.set(n.id, r)
+          }
+          if ((n as { isFlagged?: boolean }).isFlagged) fset.add(n.id)
+        }
+        setPruned(pset)
+        setPrunedReasons(preasons)
+        setFlagged(fset)
+      } catch {}
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [id])
+
   function handleSelectNode(nodeId: string | null, _type: string | null) {
     selectNode(nodeId)
     if (!nodeId) { setSelectedNode(null); return }
@@ -196,20 +265,158 @@ export default function SessionPage({ params }: PageProps) {
     setSelectedNode(node)
   }
 
+  // Write a curation action through to the DB (source of truth). Optimistic UI is
+  // already applied by the caller; on failure we roll back via `rollback`.
+  const persistAction = useCallback(
+    (action: 'prune' | 'unprune' | 'flag' | 'unflag', targetId: string, targetType: string, note: string | null, rollback: () => void) => {
+      fetch(`/api/session/${id}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, targetId, targetType, note }),
+        keepalive: true,
+      })
+        .then((r) => { if (!r.ok) rollback() })
+        .catch(rollback)
+    },
+    [id],
+  )
+
+  // Keep the in-memory graph + sessionStorage cache truthful so a cache-hit reload
+  // rehydrates curation state from node flags.
+  const patchNode = useCallback((nodeId: string, patch: Record<string, unknown>) => {
+    setGraphData((prev) => {
+      if (!prev) return prev
+      const updated: GraphData = {
+        ...prev,
+        nodes: prev.nodes.map((n) => (n.id === nodeId ? { ...n, ...patch } as GraphNode : n)),
+      }
+      try { sessionStorage.setItem(`nexus_graph_${id}`, JSON.stringify(updated)) } catch {}
+      return updated
+    })
+  }, [id])
+
+  // ─── Snapshots / undo / redo ───────────────────────────────────────────────
+  const getCurrentHistory = useCallback((): GraphHistoryState | null => {
+    if (!graphData) return null
+    return {
+      graph: graphData,
+      pruned: [...pruned],
+      pruneReasons: [...prunedReasons],
+      flagged: [...flagged],
+    }
+  }, [graphData, pruned, prunedReasons, flagged])
+
+  const applyHistoryState = useCallback((s: GraphHistoryState) => {
+    setGraphData(s.graph)
+    try { sessionStorage.setItem(`nexus_graph_${id}`, JSON.stringify(s.graph)) } catch {}
+    setPruned(new Set(s.pruned))
+    setPrunedReasons(new Map(s.pruneReasons))
+    setFlagged(new Set(s.flagged))
+    // Reconcile DB curation so a cold reload matches the restored state.
+    fetch(`/api/session/${id}/curation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({
+        prunedClusterIds: s.pruned,
+        pruneReasons: Object.fromEntries(s.pruneReasons),
+        flaggedNodeIds: s.flagged,
+      }),
+    }).catch(() => {})
+  }, [id])
+
+  const history = useGraphHistory({ getCurrent: getCurrentHistory, applyState: applyHistoryState })
+  const { commit: commitHistory } = history
+
+  // Persist current graph as a server checkpoint. `origin` 'auto' for pre-action safety nets.
+  const saveCheckpoint = useCallback(async (label: string, origin: 'manual' | 'auto' = 'manual') => {
+    if (!graphData) return
+    try {
+      await fetch(`/api/session/${id}/snapshots`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ graph: graphData, label, origin }),
+      })
+    } catch {}
+  }, [id, graphData])
+
+  const autoCheckpoint = useCallback((reason: string) => {
+    // Fire-and-forget durable safety net before a destructive change.
+    void saveCheckpoint(reason, 'auto')
+  }, [saveCheckpoint])
+
+  const handleRevert = useCallback(async (version: number) => {
+    // Let the user undo the revert locally.
+    commitHistory()
+    try {
+      const res = await fetch(`/api/session/${id}/snapshots/${version}/revert`, { method: 'POST' })
+      if (!res.ok) return
+      const data = await res.json()
+      if (data.graph) {
+        setGraphData(data.graph)
+        try { sessionStorage.setItem(`nexus_graph_${id}`, JSON.stringify(data.graph)) } catch {}
+      }
+      setPruned(new Set(data.prunedClusterIds ?? []))
+      setPrunedReasons(new Map(Object.entries(data.pruneReasons ?? {})))
+      setFlagged(new Set(data.flaggedNodeIds ?? []))
+    } catch {}
+  }, [id, commitHistory])
+
+  // Keyboard: Cmd/Ctrl+Z undo, Cmd/Ctrl+Shift+Z redo.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      e.preventDefault()
+      if (e.shiftKey) history.redo()
+      else history.undo()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [history])
+
   function handlePrune(clusterId: string, reason: string) {
+    commitHistory()
+    autoCheckpoint('Before prune')
     setPruned((prev) => { const s = new Set(prev); s.add(clusterId); return s })
     setPrunedReasons((prev) => new Map(prev).set(clusterId, reason))
     setSelectedNode((prev) => prev?.id === clusterId ? { ...prev, isPruned: true, pruneReason: reason } as typeof prev : prev)
+    patchNode(clusterId, { isPruned: true, pruneReason: reason })
+    persistAction('prune', clusterId, 'cluster', reason, () => {
+      setPruned((prev) => { const s = new Set(prev); s.delete(clusterId); return s })
+      setPrunedReasons((prev) => { const m = new Map(prev); m.delete(clusterId); return m })
+      setSelectedNode((prev) => prev?.id === clusterId ? { ...prev, isPruned: false, pruneReason: undefined } as typeof prev : prev)
+      patchNode(clusterId, { isPruned: false, pruneReason: undefined })
+    })
   }
 
   function handleUnprune(clusterId: string) {
+    commitHistory()
+    const prevReason = prunedReasons.get(clusterId)
     setPruned((prev) => { const s = new Set(prev); s.delete(clusterId); return s })
+    setPrunedReasons((prev) => { const m = new Map(prev); m.delete(clusterId); return m })
     setSelectedNode((prev) => prev?.id === clusterId ? { ...prev, isPruned: false, pruneReason: undefined } as typeof prev : prev)
+    patchNode(clusterId, { isPruned: false, pruneReason: undefined })
+    persistAction('unprune', clusterId, 'cluster', null, () => {
+      setPruned((prev) => { const s = new Set(prev); s.add(clusterId); return s })
+      setPrunedReasons((prev) => new Map(prev).set(clusterId, prevReason ?? ''))
+      setSelectedNode((prev) => prev?.id === clusterId ? { ...prev, isPruned: true, pruneReason: prevReason } as typeof prev : prev)
+      patchNode(clusterId, { isPruned: true, pruneReason: prevReason })
+    })
   }
 
-  function handleFlag(nodeId: string, _note: string) {
+  function handleFlag(nodeId: string, note: string) {
+    commitHistory()
     setFlagged((prev) => { const s = new Set(prev); s.add(nodeId); return s })
     setSelectedNode((prev) => prev?.id === nodeId ? { ...prev, isFlagged: true } as typeof prev : prev)
+    patchNode(nodeId, { isFlagged: true })
+    const targetType = graphData?.nodes.find((n) => n.id === nodeId)?.nodeType ?? 'outlier'
+    persistAction('flag', nodeId, targetType, note, () => {
+      setFlagged((prev) => { const s = new Set(prev); s.delete(nodeId); return s })
+      setSelectedNode((prev) => prev?.id === nodeId ? { ...prev, isFlagged: false } as typeof prev : prev)
+      patchNode(nodeId, { isFlagged: false })
+    })
   }
 
   function handleGoDeeper() {
@@ -230,6 +437,7 @@ export default function SessionPage({ params }: PageProps) {
       }
     })
     const nextGen = maxGen + 1
+    commitHistory()
     setGoingDeeper(true)
     fetch(`/api/expand/${selectedNode.id}`, {
       method: 'POST',
@@ -256,11 +464,31 @@ export default function SessionPage({ params }: PageProps) {
 
   function handleDirectionsGenerated(directions: DirectionNode[], edges: GraphEdge[]) {
     if (!directions.length) return
+    commitHistory()
     setGraphData((prev) => {
       if (!prev) return prev
       const updated: GraphData = {
         nodes: [...prev.nodes, ...directions],
         edges: [...prev.edges, ...edges],
+      }
+      try { sessionStorage.setItem(`nexus_graph_${id}`, JSON.stringify(updated)) } catch {}
+      return updated
+    })
+  }
+
+  function handleGraphEdit(result: import('@/lib/types').GraphEditResult) {
+    commitHistory()
+    autoCheckpoint('Before AI edit')
+    const removedNodes = new Set(result.removedNodeIds)
+    const removedEdges = new Set(result.removedEdgeIds)
+    setGraphData((prev) => {
+      if (!prev) return prev
+      const updated: GraphData = {
+        nodes: [...prev.nodes.filter((n) => !removedNodes.has(n.id)), ...result.addedNodes],
+        edges: [
+          ...prev.edges.filter((e) => !removedEdges.has(e.id) && !removedNodes.has(e.source) && !removedNodes.has(e.target)),
+          ...result.addedEdges,
+        ],
       }
       try { sessionStorage.setItem(`nexus_graph_${id}`, JSON.stringify(updated)) } catch {}
       return updated
@@ -275,6 +503,8 @@ export default function SessionPage({ params }: PageProps) {
 
   async function handleApplyDateFilter(min: number, max: number) {
     if (reclustering) return
+    commitHistory()
+    autoCheckpoint('Before re-cluster')
     setReclustering(true)
     try {
       const res = await fetch('/api/recluster', {
@@ -346,10 +576,44 @@ export default function SessionPage({ params }: PageProps) {
         <AIBanner reason={aiReason} onDismiss={() => setBannerDismissed(true)} />
       )}
 
-      {/* Auth controls — top-right overlay */}
+      {/* Auth controls + history toolbar — top-right overlay */}
       <div className="absolute top-3 right-3 z-30 flex items-center gap-2">
+        <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm p-0.5 shadow-sm">
+          <button
+            onClick={() => history.undo()}
+            disabled={!history.canUndo}
+            title="Undo (⌘Z)"
+            className="p-1.5 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition"
+          >
+            <Undo2 className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => history.redo()}
+            disabled={!history.canRedo}
+            title="Redo (⇧⌘Z)"
+            className="p-1.5 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition"
+          >
+            <Redo2 className="w-4 h-4" />
+          </button>
+          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-0.5" />
+          <button
+            onClick={() => setHistoryOpen(true)}
+            title="History & checkpoints"
+            className="p-1.5 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+          >
+            <HistoryIcon className="w-4 h-4" />
+          </button>
+        </div>
         <AuthButton />
       </div>
+
+      <HistoryPanel
+        sessionId={id}
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        onRevert={handleRevert}
+        onCheckpoint={(label) => saveCheckpoint(label, 'manual')}
+      />
 
       {showSignInModal && (
         <SignInModal
@@ -472,6 +736,7 @@ export default function SessionPage({ params }: PageProps) {
         prunedClusters={prunedClusterList}
         isDark={isDark}
         onDeselect={() => handleSelectNode(null, null)}
+        onGraphEdit={handleGraphEdit}
       />
     </div>
   )

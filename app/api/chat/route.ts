@@ -5,6 +5,13 @@ import { z } from 'zod'
 
 export const maxDuration = 30
 
+const GraphActionSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('add_node'), nodeType: z.literal('cluster'), label: z.string(), description: z.string().optional(), confidence: z.number().min(0).max(1), reason: z.string() }),
+  z.object({ type: z.literal('remove_node'), targetId: z.string(), confidence: z.number().min(0).max(1), reason: z.string() }),
+  z.object({ type: z.literal('add_edge'), sourceId: z.string(), targetId: z.string(), edgeType: z.enum(['citation', 'semantic_similarity', 'generated_from']).optional(), confidence: z.number().min(0).max(1), reason: z.string() }),
+  z.object({ type: z.literal('remove_edge'), edgeId: z.string(), confidence: z.number().min(0).max(1), reason: z.string() }),
+])
+
 const ResponseSchema = z.object({
   text: z.string(),
   action: z.union([
@@ -15,6 +22,8 @@ const ResponseSchema = z.object({
     }),
     z.null(),
   ]).default(null),
+  // Up to 3 reviewable graph edits; capped server-side regardless of what the model returns.
+  graphActions: z.array(GraphActionSchema).max(8).optional().default([]),
 })
 
 export async function POST(req: NextRequest) {
@@ -35,9 +44,15 @@ export async function POST(req: NextRequest) {
       directions = [],
     } = context
 
-    const clusterList = (clusters as { id: string; label: string; description: string; paperCount: number }[])
+    const clusterArr = clusters as { id: string; label: string; description: string; paperCount: number }[]
+    const clusterList = clusterArr
       .map(c => `• ${c.label} (${c.paperCount} papers)${c.description ? ': ' + c.description : ''}`)
       .join('\n') || 'No clusters loaded'
+
+    // id → label reference so the model can target existing nodes in graph edits.
+    const clusterRefList = clusterArr.length
+      ? clusterArr.map(c => `${c.id} = ${c.label}`).join('\n')
+      : 'No clusters loaded'
 
     const prunedList = (prunedClusters as { label: string; reason: string }[]).length > 0
       ? prunedClusters.map((p: { label: string; reason: string }) => `• ${p.label} — "${p.reason}"`).join('\n')
@@ -131,21 +146,43 @@ Respond with valid JSON only:
 Optionally, if the researcher would benefit from a refined search query, include:
 {"text": "your response", "action": {"type": "suggest_reframe", "newTopic": "refined query", "reason": "why this would improve results"}}
 
-Only suggest a reframe when the current map seems too broad, too narrow, or misaligned with the question. Never include an action unless it genuinely helps.`
+Only suggest a reframe when the current map seems too broad, too narrow, or misaligned with the question. Never include an action unless it genuinely helps.
+
+GRAPH EDITING — only when the researcher explicitly asks you to change the map (e.g. "add a cluster for X", "connect A and B", "remove the Y cluster", "drop the link between A and B"). Propose up to 3 reviewable edits via "graphActions". The user always previews and approves before anything is applied. Never edit unprompted.
+
+Existing node ids you may target (use the exact id):
+${clusterRefList}
+
+Edit shapes (each needs "confidence" 0–1 and a short "reason"):
+{"type":"add_node","nodeType":"cluster","label":"...","description":"...","confidence":0.0,"reason":"..."}
+{"type":"remove_node","targetId":"<existing id>","confidence":0.0,"reason":"..."}
+{"type":"add_edge","sourceId":"<id>","targetId":"<id>","edgeType":"semantic_similarity","confidence":0.0,"reason":"..."}
+{"type":"remove_edge","edgeId":"<edge id>","confidence":0.0,"reason":"..."}
+
+Use real ids from the list above for removals and edges. Be conservative with confidence — below 0.5 means speculative. Full response shape:
+{"text":"...","action":null,"graphActions":[ ... ]}`
 
     const userAnthropicKey = req.headers.get('x-anthropic-key') || null
     let text = ''
     let action: z.infer<typeof ResponseSchema>['action'] = null
+    let graphActions: z.infer<typeof GraphActionSchema>[] = []
 
     function parseJSON(raw: string) {
       try {
         const match = raw.match(/\{[\s\S]*\}/)
-        if (!match) return { text: raw, action: null }
+        if (!match) return { text: raw, action: null, graphActions: [] }
         const parsed = ResponseSchema.safeParse(JSON.parse(match[0]))
-        if (parsed.success) return { text: parsed.data.text, action: parsed.data.action ?? null }
-        return { text: raw, action: null }
+        if (parsed.success) {
+          return {
+            text: parsed.data.text,
+            action: parsed.data.action ?? null,
+            // Hard cap: never surface more than 3 edits at once.
+            graphActions: (parsed.data.graphActions ?? []).slice(0, 3),
+          }
+        }
+        return { text: raw, action: null, graphActions: [] }
       } catch {
-        return { text: raw, action: null }
+        return { text: raw, action: null, graphActions: [] }
       }
     }
 
@@ -161,7 +198,7 @@ Only suggest a reframe when the current map seems too broad, too narrow, or misa
         ],
       })
       const raw = resp.content.find(b => b.type === 'text')?.text ?? ''
-      ;({ text, action } = parseJSON(raw))
+      ;({ text, action, graphActions } = parseJSON(raw))
     } else {
       const groqKey = process.env.GROQ_API_KEY
       if (!groqKey) return Response.json({ text: 'AI unavailable — no API key configured.', action: null })
@@ -178,11 +215,11 @@ Only suggest a reframe when the current map seems too broad, too narrow, or misa
         response_format: { type: 'json_object' },
       })
       const raw = completion.choices[0].message.content ?? ''
-      ;({ text, action } = parseJSON(raw))
+      ;({ text, action, graphActions } = parseJSON(raw))
     }
 
     void sessionId
-    return Response.json({ text, action })
+    return Response.json({ text, action, graphActions })
   } catch (err) {
     console.error('[api/chat]', err)
     const status = (err as { status?: number }).status
