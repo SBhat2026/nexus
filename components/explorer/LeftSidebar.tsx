@@ -577,15 +577,15 @@ export default function LeftSidebar({
       <div className="p-3 flex flex-col gap-2 shrink-0">
         <button
           onClick={onGoDeeper}
-          disabled={!aiAvailable || goingDeeper}
+          disabled={!aiAvailable || goingDeeper || !canGoDeeper}
           title={
             !aiAvailable
               ? 'Requires AI — currently unavailable'
               : goingDeeper
               ? 'Clustering new papers…'
               : !canGoDeeper
-              ? 'Click a paper or outlier node in the graph first'
-              : undefined
+              ? 'Select a paper or outlier node in the graph first'
+              : 'Pull in this paper’s related work and cluster it into the map'
           }
           className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium transition disabled:bg-slate-50 disabled:dark:bg-slate-800/40 disabled:text-slate-300 disabled:dark:text-slate-600 disabled:border-slate-100 disabled:dark:border-slate-700/50 disabled:cursor-not-allowed"
         >
@@ -593,6 +593,11 @@ export default function LeftSidebar({
             ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Clustering…</>
             : <><GitBranch className="w-3.5 h-3.5" /> Go Deeper</>}
         </button>
+        <p className="text-[10px] text-slate-400 dark:text-slate-500 -mt-1 px-0.5 leading-snug">
+          {canGoDeeper
+            ? 'Expands the selected paper — fetches its related work and clusters it into a new branch.'
+            : 'Select a paper or outlier to expand its related work into new clusters.'}
+        </p>
         <button
           onClick={onExport}
           className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium transition"

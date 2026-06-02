@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { randomUUID } from 'crypto'
 import { createServerClient } from '@/lib/supabase/server'
-import type { GraphEditAction, GraphEditResult, GraphNode, GraphEdge, ClusterNode } from '@/lib/types'
+import type { GraphEditAction, GraphEditResult, GraphNode, GraphEdge, ClusterNode, PaperNode } from '@/lib/types'
 
 const MAX_ACTIONS = 3
 const MAX_NODES = 50
@@ -54,10 +54,34 @@ export async function POST(
       if (a.type === 'add_node') {
         const label = (a.label ?? '').trim()
         if (!label) { result.skipped.push({ action: a, reason: 'Empty label' }); continue }
-        if (labels.has(label.toLowerCase())) { result.skipped.push({ action: a, reason: 'Duplicate label' }); continue }
         if (nodeCount >= MAX_NODES) { result.skipped.push({ action: a, reason: `Session node limit (${MAX_NODES}) reached` }); continue }
 
         const newId = randomUUID()
+
+        if (a.nodeType === 'paper') {
+          // Optionally attach to an existing cluster; ignore bogus ids.
+          const clusterId = a.clusterId && clusterIds.has(a.clusterId) ? a.clusterId : null
+          const { error } = await db.from('papers').insert({
+            id: newId, session_id: sessionId, s2_paper_id: `ai:${newId}`,
+            title: label, abstract: a.description ?? null, authors: [], year: null,
+            citation_count: 0, cluster_id: clusterId, is_outlier: false,
+          })
+          if (error) { result.skipped.push({ action: a, reason: error.message }); continue }
+
+          paperIds.add(newId)
+          nodeCount++
+          const node: PaperNode = {
+            id: newId, nodeType: 'paper', s2PaperId: `ai:${newId}`, title: label,
+            abstract: a.description ?? '', authors: [], year: 0, citationCount: 0,
+            clusterId, isOutlier: false,
+          }
+          result.addedNodes.push(node as GraphNode)
+          audit.push({ session_id: sessionId, action_type: 'generate', target_id: newId, target_type: 'paper', note: a.reason, metadata: { ai_edit: 'add_node', label, confidence: a.confidence } })
+          continue
+        }
+
+        // cluster
+        if (labels.has(label.toLowerCase())) { result.skipped.push({ action: a, reason: 'Duplicate label' }); continue }
         const { error } = await db.from('clusters').insert({
           id: newId, session_id: sessionId, label, description: a.description ?? null,
           paper_count: 0, field: 'ai', is_pruned: false,
@@ -78,7 +102,6 @@ export async function POST(
       else if (a.type === 'remove_node') {
         const t = typeOf(a.targetId)
         if (!t) { result.skipped.push({ action: a, reason: 'Node not found' }); continue }
-        if (t === 'paper' || t === 'outlier') { result.skipped.push({ action: a, reason: 'Papers are evidence and cannot be removed' }); continue }
 
         // Remove connected edges first; report them so the client prunes them too.
         const { data: connEdges } = await db.from('edges').select('id')
@@ -87,11 +110,15 @@ export async function POST(
         await db.from('edges').delete().eq('session_id', sessionId).or(`source_id.eq.${a.targetId},target_id.eq.${a.targetId}`)
         for (const e of connEdges ?? []) result.removedEdgeIds.push(e.id)
 
-        const table = t === 'cluster' ? 'clusters' : 'direction_nodes'
+        const table = t === 'cluster' ? 'clusters'
+          : (t === 'paper' || t === 'outlier') ? 'papers'
+          : 'direction_nodes'
         const { error } = await db.from(table).delete().eq('id', a.targetId).eq('session_id', sessionId)
         if (error) { result.skipped.push({ action: a, reason: error.message }); continue }
 
-        if (t === 'cluster') clusterIds.delete(a.targetId); else directionIds.delete(a.targetId)
+        if (t === 'cluster') clusterIds.delete(a.targetId)
+        else if (t === 'paper' || t === 'outlier') { paperIds.delete(a.targetId); outlierIds.delete(a.targetId) }
+        else directionIds.delete(a.targetId)
         nodeCount--
         result.removedNodeIds.push(a.targetId)
         audit.push({ session_id: sessionId, action_type: 'generate', target_id: a.targetId, target_type: t, note: a.reason, metadata: { ai_edit: 'remove_node', confidence: a.confidence } })

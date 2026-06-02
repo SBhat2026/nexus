@@ -42,6 +42,7 @@ export default function SessionPage({ params }: PageProps) {
   const [bannerDismissed, setBannerDismissed] = useState(false)
   const [goingDeeper, setGoingDeeper] = useState(false)
   const [reclustering, setReclustering] = useState(false)
+  const [toast, setToast] = useState<{ kind: 'ok' | 'info' | 'error'; text: string } | null>(null)
 
   const [leftWidth, setLeftWidth] = useState(260)
   const [rightWidth, setRightWidth] = useState(340)
@@ -419,14 +420,23 @@ export default function SessionPage({ params }: PageProps) {
     })
   }
 
+  function flashToast(kind: 'ok' | 'info' | 'error', text: string) {
+    setToast({ kind, text })
+    window.setTimeout(() => setToast((t) => (t?.text === text ? null : t)), 4500)
+  }
+
   function handleGoDeeper() {
-    if (!selectedNode || (selectedNode.nodeType !== 'paper' && selectedNode.nodeType !== 'outlier')) return
+    if (!selectedNode || (selectedNode.nodeType !== 'paper' && selectedNode.nodeType !== 'outlier')) {
+      flashToast('info', 'Select a paper or outlier first, then Go Deeper to expand its neighborhood.')
+      return
+    }
     if (!isLoggedIn) {
       setShowGoDeepGate(true)
       return
     }
     const s2Id = (selectedNode as { s2PaperId?: string }).s2PaperId
     if (!s2Id) return
+    const sourceTitle = (selectedNode as { title?: string }).title ?? 'this paper'
     // Determine next generation from existing cluster nodes
     const nodes = graphData?.nodes ?? []
     let maxGen = 1
@@ -446,19 +456,26 @@ export default function SessionPage({ params }: PageProps) {
     })
       .then((r) => r.json())
       .then((data) => {
-        if (data.newNodes?.length) {
+        if (data?.error) { flashToast('error', 'Go Deeper failed — try again in a moment.'); return }
+        const nodes = (data.newNodes ?? []) as GraphNode[]
+        if (nodes.length) {
+          const newClusters = nodes.filter((n) => n.nodeType === 'cluster').length
+          const newPapers = nodes.filter((n) => n.nodeType === 'paper').length
           setGraphData((prev) => {
             if (!prev) return prev
             const updated: GraphData = {
-              nodes: [...prev.nodes, ...data.newNodes],
-              edges: [...prev.edges, ...data.newEdges],
+              nodes: [...prev.nodes, ...nodes],
+              edges: [...prev.edges, ...(data.newEdges ?? [])],
             }
             try { sessionStorage.setItem(`nexus_graph_${id}`, JSON.stringify(updated)) } catch {}
             return updated
           })
+          flashToast('ok', `Expanded ${sourceTitle.slice(0, 40)}${sourceTitle.length > 40 ? '…' : ''}: +${newPapers} paper${newPapers === 1 ? '' : 's'} in ${newClusters} new cluster${newClusters === 1 ? '' : 's'}.`)
+        } else {
+          flashToast('info', 'No new related papers found beyond what’s already on the map.')
         }
       })
-      .catch(() => {})
+      .catch(() => flashToast('error', 'Go Deeper failed — check your connection and retry.'))
       .finally(() => setGoingDeeper(false))
   }
 
@@ -574,6 +591,23 @@ export default function SessionPage({ params }: PageProps) {
     <div className={`h-screen flex flex-col overflow-hidden bg-white dark:bg-[#020817] ${isDark ? 'dark' : ''}`}>
       {!aiAvailable && !bannerDismissed && (
         <AIBanner reason={aiReason} onDismiss={() => setBannerDismissed(true)} />
+      )}
+
+      {toast && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 max-w-md">
+          <div
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg border text-xs font-medium backdrop-blur-sm ${
+              toast.kind === 'ok'
+                ? 'bg-emerald-50/95 dark:bg-emerald-900/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
+                : toast.kind === 'error'
+                ? 'bg-red-50/95 dark:bg-red-900/40 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
+                : 'bg-slate-50/95 dark:bg-slate-800/90 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200'
+            }`}
+          >
+            <span>{toast.text}</span>
+            <button onClick={() => setToast(null)} className="opacity-60 hover:opacity-100">✕</button>
+          </div>
+        </div>
       )}
 
       {/* Auth controls + history toolbar — top-right overlay */}

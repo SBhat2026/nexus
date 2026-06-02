@@ -17,10 +17,10 @@ interface Variant {
 
 const VARIANTS: Variant[] = [
   { lead: 'The Google Maps', accent: 'of research' },
-  { lead: 'The compass', accent: 'for new ideas' },
   { lead: 'The atlas', accent: 'of literature' },
-  { lead: 'The microscope', accent: 'for trends' },
-  { lead: 'The map', accent: 'of what’s next' },
+  { lead: 'Mission control', accent: 'for your reading' },
+  { lead: 'The bird’s-eye view', accent: 'of any field' },
+  { lead: 'The shortest path', accent: 'through the literature' },
 ]
 
 const ROTATION_MS = 3600

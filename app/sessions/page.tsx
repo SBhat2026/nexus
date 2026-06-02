@@ -4,6 +4,7 @@ import { createAuthClient } from '@/utils/supabase/server'
 import { createServerClient } from '@/lib/supabase/server'
 import AuthButton from '@/components/AuthButton'
 import NexusLogo from '@/components/NexusLogo'
+import SessionCard from '@/components/sessions/SessionCard'
 
 export default async function SessionsPage() {
   const authClient = await createAuthClient()
@@ -28,6 +29,16 @@ export default async function SessionsPage() {
     .eq('is_saved', true)
     .order('created_at', { ascending: false })
 
+  const { data: profile } = await db
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  const SESSION_CAP = 10
+  const isAdmin = !!profile?.is_admin
+  const count = sessions?.length ?? 0
+
   return (
     <main className="min-h-screen bg-white">
       <header className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
@@ -39,7 +50,15 @@ export default async function SessionsPage() {
       </header>
 
       <div className="max-w-2xl mx-auto px-6 py-12">
-        <h1 className="text-2xl font-bold text-slate-900 mb-8">My Sessions</h1>
+        <div className="mb-8 flex items-baseline justify-between gap-4">
+          <h1 className="text-2xl font-bold text-slate-900">My Sessions</h1>
+          {!isAdmin && count > 0 && (
+            <span className="text-xs text-slate-400">
+              {count} / {SESSION_CAP} saved
+              {count >= SESSION_CAP && ' · oldest auto-removed on new save'}
+            </span>
+          )}
+        </div>
 
         {!sessions || sessions.length === 0 ? (
           <div className="flex flex-col items-center gap-4 py-16 text-center">
@@ -58,19 +77,15 @@ export default async function SessionsPage() {
               const paperCount = (s.papers as unknown as { count: number }[])?.[0]?.count ?? 0
               const date = new Date(s.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
               return (
-                <Link
+                <SessionCard
                   key={s.id}
-                  href={`/session/${s.id}`}
-                  className="flex flex-col gap-1 p-4 rounded-xl border border-slate-200 hover:border-blue-300 hover:bg-slate-50 transition"
-                >
-                  <span className="font-medium text-slate-900">{s.seed_topic}</span>
-                  <span className="text-xs text-slate-400">
-                    {date} · {clusterCount} clusters · {paperCount} papers
-                    {s.data_source && s.data_source !== 'openalex' && (
-                      <span className="ml-2 text-slate-300">via {s.data_source}</span>
-                    )}
-                  </span>
-                </Link>
+                  id={s.id}
+                  seedTopic={s.seed_topic}
+                  date={date}
+                  clusterCount={clusterCount}
+                  paperCount={paperCount}
+                  dataSource={s.data_source}
+                />
               )
             })}
           </div>

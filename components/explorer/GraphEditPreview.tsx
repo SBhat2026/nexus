@@ -28,7 +28,7 @@ function nodeLabel(nodes: GraphNode[], id: string): string {
 function describe(a: GraphEditAction, nodes: GraphNode[]): { icon: React.ReactNode; title: string } {
   switch (a.type) {
     case 'add_node':
-      return { icon: <Plus className="w-3.5 h-3.5 text-emerald-600" />, title: `Add cluster “${a.label}”` }
+      return { icon: <Plus className="w-3.5 h-3.5 text-emerald-600" />, title: `Add ${a.nodeType === 'paper' ? 'paper' : 'cluster'} “${a.label}”` }
     case 'remove_node':
       return { icon: <Minus className="w-3.5 h-3.5 text-red-600" />, title: `Remove “${nodeLabel(nodes, a.targetId)}”` }
     case 'add_edge':

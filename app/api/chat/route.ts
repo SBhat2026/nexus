@@ -6,7 +6,7 @@ import { z } from 'zod'
 export const maxDuration = 30
 
 const GraphActionSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('add_node'), nodeType: z.literal('cluster'), label: z.string(), description: z.string().optional(), confidence: z.number().min(0).max(1), reason: z.string() }),
+  z.object({ type: z.literal('add_node'), nodeType: z.enum(['cluster', 'paper']), label: z.string(), description: z.string().optional(), clusterId: z.string().optional(), confidence: z.number().min(0).max(1), reason: z.string() }),
   z.object({ type: z.literal('remove_node'), targetId: z.string(), confidence: z.number().min(0).max(1), reason: z.string() }),
   z.object({ type: z.literal('add_edge'), sourceId: z.string(), targetId: z.string(), edgeType: z.enum(['citation', 'semantic_similarity', 'generated_from']).optional(), confidence: z.number().min(0).max(1), reason: z.string() }),
   z.object({ type: z.literal('remove_edge'), edgeId: z.string(), confidence: z.number().min(0).max(1), reason: z.string() }),
@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
       : 'None yet'
 
     type SelectedNode = {
+      id?: string
       nodeType: string
       label?: string
       title?: string
@@ -92,6 +93,7 @@ export async function POST(req: NextRequest) {
     let selInfo = ''
     if (sn) {
       const lines: string[] = [`Currently selected: ${sn.nodeType}`]
+      if (sn.id) lines.push(`Selected node id: ${sn.id}`)
       if (sn.nodeType === 'paper' || sn.nodeType === 'outlier') {
         if (sn.title) lines.push(`Title: ${sn.title}`)
         if (sn.year) lines.push(`Year: ${sn.year}`)
@@ -148,18 +150,21 @@ Optionally, if the researcher would benefit from a refined search query, include
 
 Only suggest a reframe when the current map seems too broad, too narrow, or misaligned with the question. Never include an action unless it genuinely helps.
 
-GRAPH EDITING — only when the researcher explicitly asks you to change the map (e.g. "add a cluster for X", "connect A and B", "remove the Y cluster", "drop the link between A and B"). Propose up to 3 reviewable edits via "graphActions". The user always previews and approves before anything is applied. Never edit unprompted.
+GRAPH EDITING — only when the researcher explicitly asks you to change the map (e.g. "add a cluster for X", "add a paper on Y", "connect A and B", "remove the Y cluster", "remove this paper", "drop the link between A and B"). You may create or remove both clusters AND papers. Propose up to 3 reviewable edits via "graphActions". The user always previews and approves before anything is applied. Never edit unprompted.
 
-Existing node ids you may target (use the exact id):
+Existing cluster ids you may target (use the exact id):
 ${clusterRefList}
+
+For removing a paper, target the currently selected node's id (shown above as "Selected node id") — you only have an id when a paper is selected. When adding a paper you may optionally set "clusterId" to attach it to one of the clusters above.
 
 Edit shapes (each needs "confidence" 0–1 and a short "reason"):
 {"type":"add_node","nodeType":"cluster","label":"...","description":"...","confidence":0.0,"reason":"..."}
+{"type":"add_node","nodeType":"paper","label":"<paper title>","description":"<abstract/summary>","clusterId":"<optional cluster id>","confidence":0.0,"reason":"..."}
 {"type":"remove_node","targetId":"<existing id>","confidence":0.0,"reason":"..."}
 {"type":"add_edge","sourceId":"<id>","targetId":"<id>","edgeType":"semantic_similarity","confidence":0.0,"reason":"..."}
 {"type":"remove_edge","edgeId":"<edge id>","confidence":0.0,"reason":"..."}
 
-Use real ids from the list above for removals and edges. Be conservative with confidence — below 0.5 means speculative. Full response shape:
+Use real ids from the lists above for removals and edges. Be conservative with confidence — below 0.5 means speculative. Full response shape:
 {"text":"...","action":null,"graphActions":[ ... ]}`
 
     const userAnthropicKey = req.headers.get('x-anthropic-key') || null

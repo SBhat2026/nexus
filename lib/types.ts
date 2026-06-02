@@ -93,7 +93,7 @@ export interface GraphData {
 // ─── AI co-pilot graph editing ─────────────────────────────────────────────
 // Structured, reviewable changes the LLM may propose. Always previewed before apply.
 export type GraphEditAction =
-  | { type: 'add_node'; nodeType: 'cluster'; label: string; description?: string; confidence: number; reason: string }
+  | { type: 'add_node'; nodeType: 'cluster' | 'paper'; label: string; description?: string; clusterId?: string; confidence: number; reason: string }
   | { type: 'remove_node'; targetId: string; confidence: number; reason: string }
   | { type: 'add_edge'; sourceId: string; targetId: string; edgeType?: EdgeType; confidence: number; reason: string }
   | { type: 'remove_edge'; edgeId: string; confidence: number; reason: string }

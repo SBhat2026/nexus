@@ -29,7 +29,7 @@ const STATUS_META: Record<RoadmapStatus, { label: string; Icon: React.ElementTyp
     Icon: FlaskConical,
     pillClasses: 'bg-slate-50 text-slate-600 border-slate-200',
     dotClasses: 'bg-slate-400',
-    description: 'Ideas we\'re weighing. Tell us if any matter to you.',
+    description: 'Ideas I\'m weighing. Tell me if any matter to you.',
   },
   shipped: {
     label: 'Shipped',
@@ -66,7 +66,7 @@ export default function RoadmapPage() {
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Roadmap</p>
           <h1 className="text-4xl font-bold text-slate-900 mb-3">Where Nexus is headed</h1>
           <p className="text-lg text-slate-500 leading-relaxed max-w-2xl">
-            Built in the open. Here&apos;s everything we&apos;ve shipped, what we&apos;re working on now,
+            Built in the open. Here&apos;s everything I&apos;ve shipped, what I&apos;m working on now,
             and what&apos;s on the horizon. This page updates as the project moves.
           </p>
         </div>
@@ -127,7 +127,16 @@ export default function RoadmapPage() {
           <h3 className="text-sm font-semibold text-slate-900 mb-2">Have an idea or a feature request?</h3>
           <p className="text-sm text-slate-600 leading-relaxed">
             Nexus is built for and with researchers. If something&apos;s missing or broken,
-            we want to hear about it. Reach out and we&apos;ll either add it to the roadmap or fix it directly.
+            I want to hear about it. Reach out and I&apos;ll either add it to the roadmap or fix it directly.
+          </p>
+          <p className="text-sm text-slate-600 leading-relaxed mt-3">
+            Product reviews and feedback:{' '}
+            <a
+              href="mailto:siddhantpramod2008@gmail.com"
+              className="font-medium text-slate-900 underline decoration-slate-300 underline-offset-2 hover:decoration-slate-900 transition"
+            >
+              siddhantpramod2008@gmail.com
+            </a>
           </p>
         </div>
       </div>

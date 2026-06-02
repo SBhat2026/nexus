@@ -104,19 +104,19 @@ export default function ChatBar({
       if (!node) return null
       if (node.nodeType === 'paper') {
         const p = node as import('@/lib/types').PaperNode
-        return { nodeType: 'paper', title: p.title, year: p.year, authors: p.authors, tldr: p.tldr, abstract: p.abstract?.slice(0, 600), citationCount: p.citationCount, clusterId: p.clusterId }
+        return { id: p.id, nodeType: 'paper', title: p.title, year: p.year, authors: p.authors, tldr: p.tldr, abstract: p.abstract?.slice(0, 600), citationCount: p.citationCount, clusterId: p.clusterId }
       }
       if (node.nodeType === 'cluster') {
         const c = node as ClusterNode
-        return { nodeType: 'cluster', label: c.label, description: c.description, paperCount: c.paperCount, medianYear: c.medianYear, clusterQuality: c.clusterQuality }
+        return { id: c.id, nodeType: 'cluster', label: c.label, description: c.description, paperCount: c.paperCount, medianYear: c.medianYear, clusterQuality: c.clusterQuality }
       }
       if (node.nodeType === 'direction') {
         const d = node as import('@/lib/types').DirectionNode
-        return { nodeType: 'direction', title: d.title, description: d.description, rationale: d.rationale, noveltyScore: d.noveltyScore, feasibilityScore: d.feasibilityScore, suggestedNextSteps: d.suggestedNextSteps }
+        return { id: d.id, nodeType: 'direction', title: d.title, description: d.description, rationale: d.rationale, noveltyScore: d.noveltyScore, feasibilityScore: d.feasibilityScore, suggestedNextSteps: d.suggestedNextSteps }
       }
       if (node.nodeType === 'outlier') {
         const o = node as import('@/lib/types').OutlierNode
-        return { nodeType: 'outlier', title: o.title, year: o.year, authors: o.authors, citationCount: o.citationCount, mahalanobisDistance: o.mahalanobisDistance, outlierExplanation: o.outlierExplanation, bridgePotential: o.bridgePotential }
+        return { id: o.id, nodeType: 'outlier', title: o.title, year: o.year, authors: o.authors, citationCount: o.citationCount, mahalanobisDistance: o.mahalanobisDistance, outlierExplanation: o.outlierExplanation, bridgePotential: o.bridgePotential }
       }
       return null
     }
