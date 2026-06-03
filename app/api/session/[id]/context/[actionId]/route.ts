@@ -4,9 +4,9 @@ import { createAuthClient } from '@/utils/supabase/server'
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: Promise<{ sessionId: string; actionId: string }> }
+  { params }: { params: Promise<{ id: string; actionId: string }> }
 ) {
-  const { sessionId, actionId } = await params
+  const { id: sessionId, actionId } = await params
 
   const authClient = await createAuthClient()
   const { data: { user } } = await authClient.auth.getUser()

@@ -5,9 +5,9 @@ import { randomUUID } from 'crypto'
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: Promise<{ sessionId: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { sessionId } = await params
+  const { id: sessionId } = await params
   const db = createServerClient()
   const { data, error } = await db
     .from('human_actions')
@@ -23,9 +23,9 @@ export async function GET(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ sessionId: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { sessionId } = await params
+  const { id: sessionId } = await params
 
   const authClient = await createAuthClient()
   const { data: { user } } = await authClient.auth.getUser()
