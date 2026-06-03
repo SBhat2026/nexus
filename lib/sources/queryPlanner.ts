@@ -154,16 +154,19 @@ export function mergeAugmentations(
   base: PlannedQuery[],
   augments: string[],
   maxAugmentWeight = 0.24,
+  field: QueryField = 'taas',
+  role: PlannedQuery['role'] = 'augment',
+  maxCount = 3,
 ): PlannedQuery[] {
   const clean = augments
     .map((a) => a.trim())
     .filter((a) => a.length >= 3 && a.length <= 80)
-    .slice(0, 3)
+    .slice(0, maxCount)
   if (clean.length === 0) return base
 
   const each = maxAugmentWeight / clean.length
   const scaledBase = base.map((p) => ({ ...p, weight: p.weight * (1 - maxAugmentWeight) }))
-  const augPlan: PlannedQuery[] = clean.map((q) => ({ q, field: 'taas', weight: each, role: 'augment' }))
+  const augPlan: PlannedQuery[] = clean.map((q) => ({ q, field, weight: each, role }))
   return normalizeWeights(dedupeQueries([...scaledBase, ...augPlan]))
 }
 

@@ -2,8 +2,11 @@ import { NextRequest } from 'next/server'
 import { randomUUID } from 'crypto'
 import { fetchPapers } from '@/lib/sources/index'
 import { getPapersWithEmbeddings } from '@/lib/papers/cache'
+import { embedTexts } from '@/lib/jina/client'
 import { runClusteringPipeline } from '@/lib/clustering/pipeline'
 import { cosineDistance } from '@/lib/clustering/dbscan'
+import { classifySpecificity, type Specificity } from '@/lib/sources/queryPlanner'
+import type { SourceWork } from '@/lib/sources/types'
 import { buildGraph } from '@/lib/graphBuilder'
 import { projectEmbeddings } from '@/lib/umap/project'
 import { createServerClient } from '@/lib/supabase/server'
@@ -14,10 +17,42 @@ import { writeProgress } from '@/lib/progress/writer'
 
 export const maxDuration = 120
 
+// Cap any single venue so one prolific journal can't dominate the corpus and skew
+// clusters toward its house style rather than the topic.
+function enforceDiversity<T extends { venue?: string | null }>(works: T[], maxPerVenue = 15): T[] {
+  const counts: Record<string, number> = {}
+  return works.filter((w) => {
+    const v = w.venue ?? 'unknown'
+    counts[v] = (counts[v] ?? 0) + 1
+    return counts[v] <= maxPerVenue
+  })
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  // Reuse the clustering cosine distance; similarity = 1 − distance.
+  return 1 - cosineDistance(a, b)
+}
+
+// Permissive when few papers (niche topics), strict when many (broad topics carry noise).
+// Broad prompts are nudged ~0.03 lower so short niche queries aren't over-filtered;
+// specific prompts can tolerate a slightly stricter gate.
+function getRelevanceThreshold(paperCount: number, specificity: Specificity = 'medium'): number {
+  let base: number
+  if (paperCount >= 150) base = 0.38
+  else if (paperCount >= 100) base = 0.33
+  else if (paperCount >= 50) base = 0.28
+  else base = 0.22
+  const nudge = specificity === 'broad' ? -0.03 : specificity === 'specific' ? 0.02 : 0
+  return Math.max(0, base + nudge)
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const seedTopic: string = (body.seedTopic ?? '').trim()
+    const forcedDomain: string | undefined = typeof body.forcedDomain === 'string' && body.forcedDomain.trim()
+      ? body.forcedDomain.trim()
+      : undefined
 
     if (!seedTopic || seedTopic.length < 2 || seedTopic.length > 1000) {
       return Response.json({ error: 'seedTopic must be 2-1000 characters' }, { status: 400 })
@@ -32,11 +67,18 @@ export async function POST(req: NextRequest) {
 
     await writeProgress(sessionId, 'fetching', 'Searching OpenAlex…')
 
-    // 1. Fetch 150 papers — decomposed queries → OpenAlex, fallback to CORE
-    const { works, provider, queries } = await fetchPapers(seedTopic, 150, { recentRatio: 0.7, recentYears: 3 })
+    // 1. Fetch 150 papers — decomposed + domain-anchored queries → OpenAlex, fallback to CORE
+    const fetchResult = await fetchPapers(seedTopic, 150, { recentRatio: 0.7, recentYears: 3, forcedDomain })
+    const provider = fetchResult.provider
+    const queries = fetchResult.queries
+    const detectedDomain = fetchResult.domain
+    const ambiguousTerms = fetchResult.ambiguities
+    // Venue diversity cap (before embedding) so no single venue dominates clusters.
+    const works: SourceWork[] = enforceDiversity(fetchResult.works, 15)
 
-    console.log(`[pipeline] Papers fetched (${provider}): ${works.length}`)
+    console.log(`[pipeline] Papers fetched (${provider}): ${fetchResult.works.length} → ${works.length} after diversity cap`)
     console.log(`[pipeline] Queries used: ${queries.join(' | ')}`)
+    if (detectedDomain) console.log(`[pipeline] Domain: ${detectedDomain}`)
 
     if (works.length < 10) {
       return Response.json({
@@ -76,7 +118,7 @@ export async function POST(req: NextRequest) {
     // 2. Embeddings
     await writeProgress(sessionId, 'embedding', `Embedding ${newWorks.length} new papers (${existingIds.size} cached)`)
     const papers = await getPapersWithEmbeddings(bareIds)
-    const withEmbeddings = papers.filter((p) => p.embedding && p.embedding.length === 1024)
+    let withEmbeddings = papers.filter((p) => p.embedding && p.embedding.length === 1024)
 
     if (withEmbeddings.length < 5) {
       return Response.json({
@@ -84,6 +126,38 @@ export async function POST(req: NextRequest) {
         papersFound: works.length,
         withEmbeddings: withEmbeddings.length,
       }, { status: 422 })
+    }
+
+    // 2b. Semantic relevance safety net — drop papers far from the (domain-anchored)
+    //     seed regardless of how they were fetched. Independent of query wording.
+    const totalFetched = withEmbeddings.length
+    let papersFiltered = 0
+    let relevanceThreshold: number | null = null
+    let relevanceWarning: string | null = null
+    try {
+      const seedText = detectedDomain ? `${detectedDomain}: ${seedTopic}` : seedTopic
+      const [seedEmbedding] = await embedTexts([seedText])
+      if (seedEmbedding && seedEmbedding.length === 1024) {
+        const scored = withEmbeddings.map((p) => ({ p, score: cosineSimilarity(p.embedding as number[], seedEmbedding) }))
+        let threshold = getRelevanceThreshold(withEmbeddings.length, classifySpecificity(seedTopic))
+        let kept = scored.filter((s) => s.score >= threshold)
+        if (kept.length < 15) {
+          threshold = Math.max(0, threshold - 0.05)
+          kept = scored.filter((s) => s.score >= threshold)
+        }
+        if (kept.length < 15) {
+          relevanceWarning = 'Relevance filter skipped — too few papers passed; showing unfiltered results.'
+          console.warn(`[Relevance filter] ${relevanceWarning}`)
+        } else {
+          relevanceThreshold = threshold
+          papersFiltered = withEmbeddings.length - kept.length
+          withEmbeddings = kept.map((s) => s.p)
+          console.log(`[Relevance filter] Kept ${kept.length} / ${totalFetched} papers (removed ${papersFiltered} below threshold ${threshold})`)
+        }
+      }
+    } catch (err) {
+      relevanceWarning = 'Relevance filter unavailable (embedding error) — showing unfiltered results.'
+      console.warn('[Relevance filter] failed:', err)
     }
 
     // 3. Cluster (PCA → UMAP 15D → DBSCAN) + UMAP 2D for visualization
@@ -161,11 +235,24 @@ export async function POST(req: NextRequest) {
       authenticatedUserId = user?.id ?? null
     } catch {}
 
+    const sourceIntelligence = {
+      detectedDomain: detectedDomain ?? null,
+      ambiguousTerms,
+      subQueries: queries,
+      papersFiltered,
+      relevanceThreshold,
+      relevanceWarning,
+      totalFetched,
+      totalClustered: withEmbeddings.length,
+      forcedDomain: forcedDomain ?? null,
+    }
+
     await db.from('sessions').insert({
       id: sessionId,
       seed_topic: seedTopic,
       data_source: provider,
       last_seen_at: new Date().toISOString(),
+      source_intelligence: sourceIntelligence,
       ...(authenticatedUserId ? { user_id: authenticatedUserId } : {}),
     })
 
@@ -324,6 +411,7 @@ export async function POST(req: NextRequest) {
       ai_reason: labelResult.reason,
       sourceProvider: provider,
       queries,
+      sourceIntelligence,
     })
   } catch (err) {
     console.error('[session/create]', err)

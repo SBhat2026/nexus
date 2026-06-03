@@ -10,13 +10,13 @@ interface RecencyOpts {
 export async function fetchPapers(
   query: string,
   limit: number,
-  _opts?: RecencyOpts
-): Promise<{ works: SourceWork[]; provider: 'openalex' | 'core'; queries: string[] }> {
+  opts?: RecencyOpts & { forcedDomain?: string }
+): Promise<{ works: SourceWork[]; provider: 'openalex' | 'core'; queries: string[]; domain: string | null; ambiguities: string[] }> {
   try {
-    const { papers, queries } = await fetchPapersFromOA(query, limit)
+    const { papers, queries, domain, ambiguities } = await fetchPapersFromOA(query, limit, opts?.forcedDomain)
     if (papers.length >= 10) {
       console.log('[sources] provider: openalex, papers:', papers.length)
-      return { works: papers, provider: 'openalex', queries }
+      return { works: papers, provider: 'openalex', queries, domain, ambiguities }
     }
     console.warn('[sources] OpenAlex returned', papers.length, 'papers — falling back to CORE')
   } catch (err) {
@@ -26,7 +26,7 @@ export async function fetchPapers(
   try {
     const coreWorks = await fetchPapersFromCore(query, limit)
     console.log('[sources] provider: core, papers:', coreWorks.length)
-    return { works: coreWorks, provider: 'core', queries: [query] }
+    return { works: coreWorks, provider: 'core', queries: [query], domain: opts?.forcedDomain ?? null, ambiguities: [] }
   } catch (err) {
     throw new Error(
       `Unable to fetch papers — both OpenAlex and CORE are unavailable. Please try again. (${err instanceof Error ? err.message : err})`

@@ -79,6 +79,7 @@ export default function SeedInput() {
       if (data.ai_reason) sessionStorage.setItem(`nexus_ai_reason_${data.sessionId}`, data.ai_reason)
       if (data.sourceProvider) sessionStorage.setItem(`nexus_source_${data.sessionId}`, data.sourceProvider)
       if (data.queries?.length) sessionStorage.setItem(`nexus_queries_${data.sessionId}`, JSON.stringify(data.queries))
+      if (data.sourceIntelligence) sessionStorage.setItem(`nexus_si_${data.sessionId}`, JSON.stringify(data.sourceIntelligence))
       router.push(`/session/${data.sessionId}`)
     } catch {
       setError('Network error — please try again.')

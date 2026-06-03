@@ -30,7 +30,7 @@ type LoadStatus = 'loading' | 'ready' | 'error'
 export default function SessionPage({ params }: PageProps) {
   const { id } = use(params)
   const router = useRouter()
-  const { setSession, selectNode, selectedNodeId, layerToggles, isDark, focusedClusterId, setFocusedCluster, setReadPaperIds, setSourceProvider } = useSessionStore()
+  const { setSession, selectNode, selectedNodeId, layerToggles, isDark, focusedClusterId, setFocusedCluster, setReadPaperIds, setSourceProvider, setSourceIntelligence } = useSessionStore()
 
   const [graphData, setGraphData] = useState<GraphData | null>(null)
   const [status, setStatus] = useState<LoadStatus>('loading')
@@ -167,6 +167,9 @@ export default function SessionPage({ params }: PageProps) {
       const cachedSource = sessionStorage.getItem(`nexus_source_${id}`) as 'openalex' | 'core' | null
       if (cachedSource) setSourceProvider(cachedSource)
 
+      const cachedSI = sessionStorage.getItem(`nexus_si_${id}`)
+      if (cachedSI) { try { setSourceIntelligence(JSON.parse(cachedSI)) } catch {} }
+
       if (sessionStorage.getItem(`nexus_saved_${id}`)) setIsSaved(true)
 
       // Use cache immediately if labels are already fresh (non-generic)
@@ -221,6 +224,10 @@ export default function SessionPage({ params }: PageProps) {
             data.pruneReasons ?? {},
             data.flaggedNodeIds ?? [],
           )
+          if (data.sourceIntelligence) {
+            setSourceIntelligence(data.sourceIntelligence)
+            try { sessionStorage.setItem(`nexus_si_${id}`, JSON.stringify(data.sourceIntelligence)) } catch {}
+          }
           sessionStorage.setItem(`nexus_graph_${id}`, JSON.stringify(data.graph))
           if (t) sessionStorage.setItem(`nexus_seed_${id}`, t)
         }
@@ -518,6 +525,36 @@ export default function SessionPage({ params }: PageProps) {
       .finally(() => setDrilling(false))
   }
 
+  // Wrong-domain re-run: re-fetch the same seed topic but pin OpenAlex/decompose to a
+  // user-corrected field, spawning a fresh session (mirrors SeedInput's create flow).
+  async function handleRerunDomain(forcedDomain: string) {
+    const fd = forcedDomain.trim()
+    if (!fd || !seedTopic) return
+    const newSessionId = crypto.randomUUID()
+    try {
+      const res = await fetch('/api/session/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seedTopic, sessionId: newSessionId, forcedDomain: fd }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error || !data.sessionId) {
+        flashToast('error', data.error ?? 'Re-run failed — try again in a moment.')
+        return
+      }
+      sessionStorage.setItem(`nexus_graph_${data.sessionId}`, JSON.stringify(data.graph))
+      sessionStorage.setItem(`nexus_seed_${data.sessionId}`, seedTopic)
+      sessionStorage.setItem(`nexus_ai_available_${data.sessionId}`, String(data.ai_available !== false))
+      if (data.ai_reason) sessionStorage.setItem(`nexus_ai_reason_${data.sessionId}`, data.ai_reason)
+      if (data.sourceProvider) sessionStorage.setItem(`nexus_source_${data.sessionId}`, data.sourceProvider)
+      if (data.queries?.length) sessionStorage.setItem(`nexus_queries_${data.sessionId}`, JSON.stringify(data.queries))
+      if (data.sourceIntelligence) sessionStorage.setItem(`nexus_si_${data.sessionId}`, JSON.stringify(data.sourceIntelligence))
+      router.push(`/session/${data.sessionId}`)
+    } catch {
+      flashToast('error', 'Network error — please try again.')
+    }
+  }
+
   function handleDirectionsGenerated(directions: DirectionNode[], edges: GraphEdge[]) {
     if (!directions.length) return
     commitHistory()
@@ -755,6 +792,7 @@ export default function SessionPage({ params }: PageProps) {
           selectedNodeType={selectedNode?.nodeType ?? null}
           goingDeeper={goingDeeper}
           reclustering={reclustering}
+          onRerunDomain={handleRerunDomain}
           width={leftWidth}
         />
         <div className="flex-1 relative overflow-hidden flex">

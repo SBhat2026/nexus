@@ -1,10 +1,57 @@
 import { fetchReferences } from '@/lib/openalex/client'
 import { oaId } from '@/lib/openalex/types'
-import type { SourceWork } from './types'
-import { planSearchQueries } from './decompose'
+import type { SourceWork, SourceConcept } from './types'
+import { buildRetrievalPlan } from './decompose'
 import { blendRank, coverageScore, type PlannedQuery } from './queryPlanner'
 
 const MAILTO = 'siddhantbhat3@gmail.com'
+
+const SELECT_FIELDS =
+  'id,title,abstract_inverted_index,authorships,publication_year,cited_by_count,referenced_works,primary_location,concepts,relevance_score'
+
+interface OAResultWork {
+  id: string
+  title?: string
+  abstract_inverted_index?: Record<string, number[]> | null
+  authorships?: { author?: { display_name?: string } }[]
+  publication_year?: number | null
+  cited_by_count?: number
+  referenced_works?: string[]
+  primary_location?: { source?: { display_name?: string | null } | null } | null
+  concepts?: { id?: string; display_name?: string; score?: number }[]
+  relevance_score?: number | null
+}
+
+/** Map a raw OpenAlex work into our ScoredWork shape (shared across fetch rounds). */
+function mapWork(w: OAResultWork): ScoredWork {
+  return {
+    id: oaId(w.id),
+    title: w.title ?? '',
+    abstract: invertedIndexToAbstract(w.abstract_inverted_index ?? null),
+    authors: w.authorships?.map((a) => a.author?.display_name).filter((n): n is string => !!n) ?? [],
+    year: w.publication_year ?? null,
+    citationCount: w.cited_by_count ?? 0,
+    venue: w.primary_location?.source?.display_name ?? null,
+    referencedWorkIds: w.referenced_works?.map(oaId) ?? [],
+    sourceProvider: 'openalex',
+    concepts: (w.concepts ?? [])
+      .filter((c): c is { id: string; display_name?: string; score?: number } => typeof c.id === 'string')
+      .map((c): SourceConcept => ({ id: c.id, display_name: c.display_name ?? '', score: c.score ?? 0 })),
+    relevanceScore: w.relevance_score ?? 0,
+  }
+}
+
+/** Aggregate concept scores across a paper set; return the top-N concept ids. */
+export function extractTopConceptIds(works: { concepts?: SourceConcept[] }[], topN = 5): string[] {
+  const scores: Record<string, number> = {}
+  for (const w of works) {
+    for (const c of w.concepts ?? []) scores[c.id] = (scores[c.id] ?? 0) + c.score
+  }
+  return Object.entries(scores)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, topN)
+    .map(([id]) => id)
+}
 
 function invertedIndexToAbstract(invertedIndex: Record<string, number[]> | null): string {
   if (!invertedIndex) return ''
@@ -41,7 +88,7 @@ export async function fetchFromOpenAlex(
       ? `${baseFilter},title_and_abstract.search:${planned.q}`
       : baseFilter,
     'per-page': String(perPage),
-    select: 'id,title,abstract_inverted_index,authorships,publication_year,cited_by_count,referenced_works,primary_location,relevance_score',
+    select: SELECT_FIELDS,
     mailto: MAILTO,
   })
   // Relevance sort is implicit when a search is present; only attach `search` for the
@@ -67,34 +114,11 @@ export async function fetchFromOpenAlex(
     }
 
     const data = await res.json()
-    const works = data.results ?? []
+    const works: OAResultWork[] = data.results ?? []
 
     return works
-      .filter((w: { title?: string; abstract_inverted_index?: Record<string, number[]> | null }) =>
-        w.title && w.abstract_inverted_index
-      )
-      .map((w: {
-        id: string
-        title: string
-        abstract_inverted_index: Record<string, number[]>
-        authorships?: { author?: { display_name?: string } }[]
-        publication_year?: number | null
-        cited_by_count?: number
-        referenced_works?: string[]
-        primary_location?: { source?: { display_name?: string | null } | null } | null
-        relevance_score?: number | null
-      }): ScoredWork => ({
-        id: oaId(w.id),
-        title: w.title,
-        abstract: invertedIndexToAbstract(w.abstract_inverted_index),
-        authors: w.authorships?.map((a) => a.author?.display_name).filter((n): n is string => !!n) ?? [],
-        year: w.publication_year ?? null,
-        citationCount: w.cited_by_count ?? 0,
-        venue: w.primary_location?.source?.display_name ?? null,
-        referencedWorkIds: w.referenced_works?.map(oaId) ?? [],
-        sourceProvider: 'openalex',
-        relevanceScore: w.relevance_score ?? 0,
-      }))
+      .filter((w) => w.title && w.abstract_inverted_index)
+      .map(mapWork)
   } catch (err) {
     clearTimeout(timer)
     const reason = err instanceof Error ? err.message : String(err)
@@ -103,13 +127,52 @@ export async function fetchFromOpenAlex(
   }
 }
 
+/**
+ * Concept bootstrapping: a second round anchored to OpenAlex's own taxonomy. Given
+ * the top concept ids from round one, fetch more works tagged with those concepts.
+ * There is no search term here, so sorting by citations (most-established first) is
+ * appropriate — this round self-corrects domain errors by anchoring to what the
+ * round-one papers actually ARE about.
+ */
+async function fetchByConcepts(conceptIds: string[], limit: number): Promise<ScoredWork[]> {
+  if (conceptIds.length === 0) return []
+  const perPage = Math.min(Math.max(limit, 1), 200)
+  const params = new URLSearchParams({
+    filter: `has_abstract:true,type:article,concepts.id:${conceptIds.join('|')}`,
+    sort: 'cited_by_count:desc',
+    'per-page': String(perPage),
+    select: SELECT_FIELDS,
+    mailto: MAILTO,
+  })
+  const url = `https://api.openalex.org/works?${params}`
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 8_000)
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': `Nexus Research Tool (${MAILTO})` },
+      signal: controller.signal,
+      next: { revalidate: 0 },
+    })
+    clearTimeout(timer)
+    if (!res.ok) return []
+    const data = await res.json()
+    const works: OAResultWork[] = data.results ?? []
+    return works.filter((w) => w.title && w.abstract_inverted_index).map(mapWork)
+  } catch {
+    clearTimeout(timer)
+    return []
+  }
+}
+
 export async function fetchPapers(
   seedTopic: string,
-  targetCount = 150
-): Promise<{ papers: SourceWork[]; queries: string[] }> {
-  const plan = await planSearchQueries(seedTopic, { augment: true })
+  targetCount = 150,
+  forcedDomain?: string,
+): Promise<{ papers: SourceWork[]; queries: string[]; domain: string | null; ambiguities: string[] }> {
+  const { plan, domain, ambiguities } = await buildRetrievalPlan(seedTopic, { augment: true, forcedDomain })
   const queries = plan.map((p) => p.q)
   console.log('[openalex] Query plan:', plan.map((p) => `${p.q} [${p.field} w=${p.weight.toFixed(2)} ${p.role}]`).join(' | '))
+  if (domain) console.log(`[openalex] Detected domain: ${domain}${ambiguities.length ? ` · ambiguities: ${ambiguities.join('; ')}` : ''}`)
 
   // Allocate the paper budget by weight, with a floor so small-weight facets still
   // contribute a few candidates. Over-fetch ~1.6× so the blended re-rank has a pool.
@@ -134,6 +197,19 @@ export async function fetchPapers(
       }
     }
   })
+
+  // Concept bootstrapping (round 2): anchor to OpenAlex's taxonomy of the round-1
+  // papers, pulling in more works that share their top concepts. Self-corrects
+  // domain mismatches. Skipped silently when no concepts are present.
+  const topConceptIds = extractTopConceptIds([...agg.values()], 5).slice(0, 3)
+  if (topConceptIds.length > 0) {
+    const conceptWorks = await fetchByConcepts(topConceptIds, 50)
+    let added = 0
+    for (const p of conceptWorks) {
+      if (!agg.has(p.id)) { agg.set(p.id, { ...p, weightBoost: 0.1 }); added++ }
+    }
+    console.log(`[openalex] Concept bootstrap (${topConceptIds.length} concepts) → +${added} papers`)
+  }
 
   let candidates = [...agg.values()]
   const rawCount = results.reduce((s, r) => s + (r.status === 'fulfilled' ? r.value.length : 0), 0)
@@ -171,7 +247,7 @@ export async function fetchPapers(
     return rest as SourceWork
   })
 
-  return { papers, queries }
+  return { papers, queries, domain, ambiguities }
 }
 
 interface RecencyOpts {

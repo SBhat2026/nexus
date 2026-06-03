@@ -12,6 +12,7 @@ export interface OAWork {
   cited_by_count: number
   referenced_works: string[]                        // OpenAlex full URLs
   primary_location?: { source?: { display_name?: string | null } | null } | null
+  concepts?: { id: string; display_name: string; score: number }[]
 }
 
 export interface OASearchResponse {

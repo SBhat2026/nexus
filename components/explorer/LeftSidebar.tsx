@@ -21,6 +21,7 @@ interface Props {
   selectedNodeType?: string | null
   goingDeeper?: boolean
   reclustering?: boolean
+  onRerunDomain?: (forcedDomain: string) => void | Promise<void>
   width?: number
 }
 
@@ -39,6 +40,7 @@ export default function LeftSidebar({
   selectedNodeType,
   goingDeeper = false,
   reclustering = false,
+  onRerunDomain,
   width,
 }: Props) {
   const {
@@ -46,6 +48,7 @@ export default function LeftSidebar({
     expandedClusters, toggleCluster, focusedClusterId, setFocusedCluster,
     paperFilters, hideRead, toggleAuthorFilter, toggleVenueFilter,
     setYearRangeFilter, clearPaperFilters, setHideRead, sourceProvider,
+    sourceIntelligence,
   } = useSessionStore()
   const [editingName, setEditingName] = useState(false)
   const [nameValue, setNameValue] = useState(sessionName)
@@ -53,6 +56,10 @@ export default function LeftSidebar({
   const [byokOpen, setByokOpen] = useState(false)
   const [dateFilterOpen, setDateFilterOpen] = useState(false)
   const [paperFiltersOpen, setPaperFiltersOpen] = useState(false)
+  const [siOpen, setSiOpen] = useState(false)
+  const [domainCorrecting, setDomainCorrecting] = useState(false)
+  const [domainInput, setDomainInput] = useState('')
+  const [rerunning, setRerunning] = useState(false)
   const [localYearMin, setLocalYearMin] = useState('')
   const [localYearMax, setLocalYearMax] = useState('')
   const [minYear, setMinYear] = useState(String(new Date().getFullYear() - 6))
@@ -299,6 +306,118 @@ export default function LeftSidebar({
               >
                 {reclustering ? <><Loader2 className="w-3 h-3 animate-spin" /> Re-clustering…</> : 'Apply & re-cluster'}
               </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Source Intelligence — detected domain, sub-queries, relevance-filter outcome */}
+      {sourceIntelligence && (
+        <div className="border-b border-slate-200 dark:border-slate-700/60 shrink-0">
+          <button
+            className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+            onClick={() => setSiOpen((v) => !v)}
+          >
+            <span className="flex items-center gap-1.5">
+              <Info className="w-3.5 h-3.5" />
+              Source Intelligence
+            </span>
+            {siOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+          {siOpen && (
+            <div className="px-3 pb-3 space-y-3 text-xs">
+              {/* Detected domain */}
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1.5">Detected domain</div>
+                {sourceIntelligence.detectedDomain ? (
+                  <span className="inline-block px-2 py-0.5 rounded-full text-[11px] bg-blue-100 dark:bg-blue-900/40 border border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300">
+                    {sourceIntelligence.detectedDomain}
+                  </span>
+                ) : (
+                  <span className="text-slate-400 dark:text-slate-500 italic">not detected</span>
+                )}
+                {sourceIntelligence.forcedDomain && (
+                  <div className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">corrected to “{sourceIntelligence.forcedDomain}”</div>
+                )}
+              </div>
+
+              {/* Sub-queries */}
+              {sourceIntelligence.subQueries.length > 0 && (
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1.5">Sub-queries</div>
+                  <ul className="space-y-0.5 list-disc list-inside text-slate-600 dark:text-slate-300">
+                    {sourceIntelligence.subQueries.map((q, i) => (
+                      <li key={i} className="truncate" title={q}>{q}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Ambiguities */}
+              {sourceIntelligence.ambiguousTerms.length > 0 && (
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1.5">Ambiguities resolved</div>
+                  <ul className="space-y-0.5 list-disc list-inside text-slate-600 dark:text-slate-300">
+                    {sourceIntelligence.ambiguousTerms.map((a, i) => (
+                      <li key={i} title={a}>{a}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Relevance-filter outcome */}
+              <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                {sourceIntelligence.relevanceWarning ? (
+                  <span className="text-amber-600 dark:text-amber-400">{sourceIntelligence.relevanceWarning}</span>
+                ) : (
+                  <>
+                    Papers clustered: <span className="font-medium text-slate-700 dark:text-slate-200">{sourceIntelligence.totalClustered}</span> / {sourceIntelligence.totalFetched} fetched
+                    {sourceIntelligence.papersFiltered > 0 && <> · removed {sourceIntelligence.papersFiltered} below threshold</>}
+                  </>
+                )}
+              </div>
+
+              {/* Wrong-domain re-run */}
+              {onRerunDomain && (
+                <div className="pt-1 border-t border-slate-100 dark:border-slate-800">
+                  {!domainCorrecting ? (
+                    <button
+                      onClick={() => { setDomainCorrecting(true); setDomainInput(sourceIntelligence.detectedDomain ?? '') }}
+                      className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      Wrong domain? Correct it →
+                    </button>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <input
+                        autoFocus
+                        value={domainInput}
+                        onChange={(e) => setDomainInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && domainInput.trim() && !rerunning) { setRerunning(true); Promise.resolve(onRerunDomain(domainInput.trim())).finally(() => setRerunning(false)) } }}
+                        placeholder="e.g. Human-Computer Interaction"
+                        disabled={rerunning}
+                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-[11px] text-slate-800 dark:text-slate-200 outline-none focus:border-blue-400 disabled:opacity-50"
+                      />
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => { if (domainInput.trim() && !rerunning) { setRerunning(true); Promise.resolve(onRerunDomain(domainInput.trim())).finally(() => setRerunning(false)) } }}
+                          disabled={!domainInput.trim() || rerunning}
+                          className="flex items-center justify-center gap-1 px-2 py-1 rounded text-[11px] bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 border border-blue-200 dark:border-blue-800/40 text-blue-600 dark:text-blue-400 disabled:opacity-40 transition"
+                        >
+                          {rerunning ? <><Loader2 className="w-3 h-3 animate-spin" /> Re-running…</> : 'Re-run search'}
+                        </button>
+                        <button
+                          onClick={() => setDomainCorrecting(false)}
+                          disabled={rerunning}
+                          className="px-2 py-1 rounded text-[11px] text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 transition"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

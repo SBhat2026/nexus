@@ -127,3 +127,18 @@ export interface LogEntry {
   note?: string
   label?: string
 }
+
+// Per-session record of how papers were sourced — surfaced in the Zone A
+// "Source Intelligence" panel and used by the wrong-domain re-run. Mirrors the
+// jsonb persisted in sessions.source_intelligence (migration 0021).
+export interface SourceIntelligence {
+  detectedDomain: string | null
+  ambiguousTerms: string[]
+  subQueries: string[]
+  papersFiltered: number
+  relevanceThreshold: number | null
+  relevanceWarning: string | null
+  totalFetched: number
+  totalClustered: number
+  forcedDomain: string | null
+}

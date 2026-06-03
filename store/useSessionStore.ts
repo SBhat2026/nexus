@@ -1,7 +1,7 @@
 'use client'
 
 import { create } from 'zustand'
-import type { LayerToggles, LogEntry, NodeType } from '@/lib/types'
+import type { LayerToggles, LogEntry, NodeType, SourceIntelligence } from '@/lib/types'
 
 export interface PaperFilters {
   authors: Set<string>
@@ -15,6 +15,7 @@ interface SessionState {
   seedTopic: string
   sessionName: string
   sourceProvider: 'openalex' | 'core' | null
+  sourceIntelligence: SourceIntelligence | null
   selectedNodeId: string | null
   depth: number
   layerToggles: LayerToggles
@@ -33,6 +34,7 @@ interface SessionActions {
   setSession: (id: string, topic: string) => void
   setSessionName: (name: string) => void
   setSourceProvider: (p: 'openalex' | 'core' | null) => void
+  setSourceIntelligence: (si: SourceIntelligence | null) => void
   selectNode: (id: string | null) => void
   setDepth: (d: number) => void
   toggleLayer: (key: keyof LayerToggles) => void
@@ -64,6 +66,7 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
   seedTopic: '',
   sessionName: 'Untitled Session',
   sourceProvider: null,
+  sourceIntelligence: null,
   selectedNodeId: null,
   depth: 2,
   focusNodeId: null,
@@ -91,6 +94,8 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
   setSessionName: (name) => set({ sessionName: name }),
 
   setSourceProvider: (p) => set({ sourceProvider: p }),
+
+  setSourceIntelligence: (si) => set({ sourceIntelligence: si }),
 
   selectNode: (id) => set({ selectedNodeId: id }),
 

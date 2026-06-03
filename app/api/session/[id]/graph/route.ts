@@ -123,6 +123,8 @@ export async function GET(
       prunedClusterIds: [...prunedClusters],
       pruneReasons: Object.fromEntries(pruneReasons),
       flaggedNodeIds: [...flaggedNodes],
+      // Source Intelligence panel survives reload (jsonb persisted at create time).
+      sourceIntelligence: sessionRes.data.source_intelligence ?? null,
     })
   } catch (err) {
     console.error('[session/graph]', err)

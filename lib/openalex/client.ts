@@ -16,6 +16,7 @@ const WORK_FIELDS = [
   'cited_by_count',
   'referenced_works',
   'primary_location',
+  'concepts',
 ].join(',')
 
 async function oaFetch(url: string): Promise<Response> {
