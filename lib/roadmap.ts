@@ -87,6 +87,18 @@ export const ROADMAP: RoadmapItem[] = [
     tags: ['ai', 'core'],
   },
 
+  // ─── In progress ─────────────────────────────────────────────────────
+  {
+    id: 'retrieval-relevance',
+    title: 'Retrieval relevance hardening',
+    description:
+      'Keep every map on-topic: a token-budget-paced embedding pipeline so the semantic relevance filter always runs (no silent rate-limit fallback), plus better domain detection and disambiguation for ambiguous seeds (e.g. "phenomenology", "attention") and finer cluster granularity.',
+    status: 'in-progress',
+    tier: 1,
+    eta: 'Q3 2026',
+    tags: ['ai', 'core', 'retrieval'],
+  },
+
   // ─── Tier 2 (polish) ─────────────────────────────────────────────────
   {
     id: 'session-management',
