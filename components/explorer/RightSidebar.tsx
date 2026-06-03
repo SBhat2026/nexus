@@ -287,13 +287,13 @@ function ClusterDetail({
             onClick={() => onDrillCluster(node.id)}
             disabled={drilling || !sessionId}
             title="Open a deeper map seeded from this cluster's papers and sub-topics"
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:bg-slate-200 dark:disabled:bg-slate-700/50 text-white disabled:text-slate-400 dark:disabled:text-slate-500 font-semibold text-sm transition shadow-sm disabled:cursor-not-allowed disabled:shadow-none"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-slate-200 dark:disabled:bg-slate-700/50 text-white disabled:text-slate-400 dark:disabled:text-slate-500 font-semibold text-sm transition shadow-sm disabled:cursor-not-allowed disabled:shadow-none"
           >
             {drilling ? <Loader2 className="w-4 h-4 animate-spin" /> : <ZoomIn className="w-4 h-4" />}
             {drilling ? 'Generating deeper map…' : 'Drill into cluster'}
           </button>
           {(node.drilldownCount ?? 0) > 0 && (
-            <p className="text-xs text-purple-500 dark:text-purple-400 mt-1.5 text-center">
+            <p className="text-xs text-blue-500 dark:text-blue-400 mt-1.5 text-center">
               {node.drilldownCount} deeper map{node.drilldownCount === 1 ? '' : 's'} from this cluster
             </p>
           )}

@@ -15,7 +15,9 @@ import { labelClusters, type LabelResult } from '@/lib/anthropic/labelClusters'
 import { labelClustersGroq } from '@/lib/groq/labelClusters'
 import { writeProgress } from '@/lib/progress/writer'
 
-export const maxDuration = 120
+// Raised from 120s: sequential batched embedding (lib/jina/client) may back off a
+// full minute on a rate-limited batch, so the pipeline needs headroom.
+export const maxDuration = 300
 
 // Cap any single venue so one prolific journal can't dominate the corpus and skew
 // clusters toward its house style rather than the topic.

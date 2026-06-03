@@ -687,7 +687,10 @@ export default function SessionPage({ params }: PageProps) {
       )}
 
       {/* Auth controls + history toolbar — top-right overlay */}
-      <div className="absolute top-3 right-3 z-30 flex items-center gap-2">
+      <div
+        className="absolute top-3 z-30 flex items-center gap-2 transition-[right] duration-[250ms]"
+        style={{ right: (selectedNode ? rightWidth : 0) + 12 }}
+      >
         <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm p-0.5 shadow-sm">
           <button
             onClick={() => history.undo()}
