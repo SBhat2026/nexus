@@ -16,6 +16,9 @@ import { createClient } from '@/lib/supabase/client'
 import { useSessionHeartbeat } from '@/hooks/useSessionHeartbeat'
 import { useGraphHistory, type GraphHistoryState } from '@/hooks/useGraphHistory'
 import HistoryPanel from '@/components/explorer/HistoryPanel'
+import SessionProgress from '@/components/landing/SessionProgress'
+import Breadcrumb from '@/components/explorer/Breadcrumb'
+import { useRouter } from 'next/navigation'
 import { Undo2, Redo2, History as HistoryIcon } from 'lucide-react'
 
 interface PageProps {
@@ -26,6 +29,7 @@ type LoadStatus = 'loading' | 'ready' | 'error'
 
 export default function SessionPage({ params }: PageProps) {
   const { id } = use(params)
+  const router = useRouter()
   const { setSession, selectNode, selectedNodeId, layerToggles, isDark, focusedClusterId, setFocusedCluster, setReadPaperIds, setSourceProvider } = useSessionStore()
 
   const [graphData, setGraphData] = useState<GraphData | null>(null)
@@ -41,6 +45,8 @@ export default function SessionPage({ params }: PageProps) {
   const [aiReason, setAiReason] = useState<'quota' | 'error' | null>(null)
   const [bannerDismissed, setBannerDismissed] = useState(false)
   const [goingDeeper, setGoingDeeper] = useState(false)
+  const [drilling, setDrilling] = useState(false)
+  const [drillProgress, setDrillProgress] = useState<{ sessionId: string; topic: string } | null>(null)
   const [reclustering, setReclustering] = useState(false)
   const [toast, setToast] = useState<{ kind: 'ok' | 'info' | 'error'; text: string } | null>(null)
 
@@ -479,6 +485,39 @@ export default function SessionPage({ params }: PageProps) {
       .finally(() => setGoingDeeper(false))
   }
 
+  function handleDrillCluster(clusterId: string) {
+    if (drilling) return
+    if (!isLoggedIn) {
+      setShowGoDeepGate(true)
+      return
+    }
+    const cluster = graphData?.nodes.find((n) => n.id === clusterId)
+    const topic = cluster && cluster.nodeType === 'cluster' ? cluster.label : 'this cluster'
+    const newSessionId = crypto.randomUUID()
+    setDrilling(true)
+    setDrillProgress({ sessionId: newSessionId, topic })
+    fetch('/api/session/drilldown', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parentSessionId: id, clusterId, newSessionId }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.error || !data?.sessionId) {
+          setDrillProgress(null)
+          flashToast('error', data?.error ?? 'Drill failed — try again in a moment.')
+          return
+        }
+        // Navigate to the new child session (breadcrumb provides the way back).
+        router.push(`/session/${data.sessionId}`)
+      })
+      .catch(() => {
+        setDrillProgress(null)
+        flashToast('error', 'Drill failed — check your connection and retry.')
+      })
+      .finally(() => setDrilling(false))
+  }
+
   function handleDirectionsGenerated(directions: DirectionNode[], edges: GraphEdge[]) {
     if (!directions.length) return
     commitHistory()
@@ -692,6 +731,14 @@ export default function SessionPage({ params }: PageProps) {
           </div>
         </div>
       )}
+      {/* Drill-into-cluster progress — reuses the 6-stage session-create overlay */}
+      {drillProgress && (
+        <SessionProgress
+          sessionId={drillProgress.sessionId}
+          topic={`Drilling into “${drillProgress.topic}”`}
+          onRetry={() => setDrillProgress(null)}
+        />
+      )}
       <div className="flex flex-1 overflow-hidden min-h-0">
         <LeftSidebar
           onGoDeeper={handleGoDeeper}
@@ -725,7 +772,7 @@ export default function SessionPage({ params }: PageProps) {
             pruned={pruned}
             isDark={isDark}
           />
-          {focusedClusterId && (
+          {focusedClusterId ? (
             <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30">
               <button
                 onClick={() => setFocusedCluster(null)}
@@ -733,6 +780,10 @@ export default function SessionPage({ params }: PageProps) {
               >
                 Exit focus mode
               </button>
+            </div>
+          ) : (
+            <div className="absolute top-3 left-4 z-30">
+              <Breadcrumb sessionId={id} />
             </div>
           )}
           {/* right resize handle */}
@@ -758,6 +809,8 @@ export default function SessionPage({ params }: PageProps) {
               onFindSimilar={handleGoDeeper}
               findingSimilar={goingDeeper}
               isLoggedIn={isLoggedIn}
+              onDrillCluster={handleDrillCluster}
+              drilling={drilling}
             />
           </div>
         </div>

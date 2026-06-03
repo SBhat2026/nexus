@@ -22,6 +22,7 @@ export default async function SessionsPage() {
       seed_topic,
       created_at,
       data_source,
+      depth,
       clusters(count),
       papers(count)
     `)
@@ -85,6 +86,7 @@ export default async function SessionsPage() {
                   clusterCount={clusterCount}
                   paperCount={paperCount}
                   dataSource={s.data_source}
+                  depth={(s as { depth?: number }).depth ?? 0}
                 />
               )
             })}

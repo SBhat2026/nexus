@@ -29,7 +29,7 @@ type ScoredWork = SourceWork & { relevanceScore: number }
  * default when searching) instead of citations — citation-sorting discards the
  * relevance ranking and floods the corpus with highly-cited but tangential papers.
  */
-async function fetchFromOpenAlex(
+export async function fetchFromOpenAlex(
   planned: Pick<PlannedQuery, 'q' | 'field'>,
   limit: number,
 ): Promise<ScoredWork[]> {

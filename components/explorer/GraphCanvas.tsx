@@ -319,6 +319,15 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
           .attr('fill', color).attr('font-size', 9)
           .attr('opacity', 0.6)
 
+        // Depth badge — number of child (drill-down) sessions spawned from this cluster
+        const drilldownCount = c.drilldownCount ?? 0
+        if (drilldownCount > 0 && !isPruned) {
+          el.append('text')
+            .text(`+${drilldownCount} deeper map${drilldownCount === 1 ? '' : 's'}`)
+            .attr('text-anchor', 'middle').attr('dy', 52)
+            .attr('fill', '#a855f7').attr('font-size', 10).attr('font-weight', '600')
+        }
+
       } else if (d.nodeType === 'paper') {
         const p = d as PaperNode
         const r = Math.max(5, Math.min(14, Math.sqrt(p.citationCount / 300) + 4))

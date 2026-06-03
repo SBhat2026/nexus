@@ -41,6 +41,7 @@ export interface ClusterNode extends BaseNode {
   clusterQuality?: number
   generation?: number  // 1 = initial; 2+ = Go Deeper rounds
   medianYear?: number | null
+  drilldownCount?: number  // number of child sessions drilled from this cluster
 }
 
 export interface DirectionNode extends BaseNode {

@@ -1,7 +1,7 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, Flag, Scissors, ExternalLink, BookOpen, Zap, Loader2, Focus, BookMarked, Building2 } from 'lucide-react'
+import { X, Flag, Scissors, ExternalLink, BookOpen, Zap, Loader2, Focus, BookMarked, Building2, ZoomIn } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { GraphNode, PaperNode, ClusterNode, DirectionNode, OutlierNode, GraphEdge } from '@/lib/types'
@@ -22,6 +22,8 @@ interface Props {
   onFindSimilar?: () => void
   findingSimilar?: boolean
   isLoggedIn?: boolean
+  onDrillCluster?: (clusterId: string) => void
+  drilling?: boolean
 }
 
 
@@ -151,6 +153,8 @@ function ClusterDetail({
   aiAvailable = true,
   hasByokKey = false,
   allNodes,
+  onDrillCluster,
+  drilling = false,
 }: {
   node: ClusterNode
   onPrune: (id: string, reason: string) => void
@@ -162,6 +166,8 @@ function ClusterDetail({
   aiAvailable?: boolean
   hasByokKey?: boolean
   allNodes?: GraphNode[]
+  onDrillCluster?: (clusterId: string) => void
+  drilling?: boolean
 }) {
   const [pruneReason, setPruneReason] = useState('')
   const [showPruneInput, setShowPruneInput] = useState(false)
@@ -273,6 +279,26 @@ function ClusterDetail({
         {generating ? 'Generating directions…' : 'Generate research directions'}
       </button>
       {genError && <div className="text-xs text-red-500 dark:text-red-400 -mt-2">{genError}</div>}
+
+      {/* Drill into cluster — spawns a deeper child session seeded from this cluster */}
+      {onDrillCluster && !node.isPruned && (
+        <div>
+          <button
+            onClick={() => onDrillCluster(node.id)}
+            disabled={drilling || !sessionId}
+            title="Open a deeper map seeded from this cluster's papers and sub-topics"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:bg-slate-200 dark:disabled:bg-slate-700/50 text-white disabled:text-slate-400 dark:disabled:text-slate-500 font-semibold text-sm transition shadow-sm disabled:cursor-not-allowed disabled:shadow-none"
+          >
+            {drilling ? <Loader2 className="w-4 h-4 animate-spin" /> : <ZoomIn className="w-4 h-4" />}
+            {drilling ? 'Generating deeper map…' : 'Drill into cluster'}
+          </button>
+          {(node.drilldownCount ?? 0) > 0 && (
+            <p className="text-xs text-purple-500 dark:text-purple-400 mt-1.5 text-center">
+              {node.drilldownCount} deeper map{node.drilldownCount === 1 ? '' : 's'} from this cluster
+            </p>
+          )}
+        </div>
+      )}
 
       {node.isPruned && (
         <div className="space-y-2">
@@ -528,7 +554,7 @@ function OutlierDetail({
   )
 }
 
-export default function RightSidebar({ node, onClose, onPrune, onUnprune, onFlag, onDirectionsGenerated, onAiUnavailable, sessionId, prunedClusters = [], aiAvailable = true, allNodes, onFindSimilar, findingSimilar = false, isLoggedIn = false }: Props) {
+export default function RightSidebar({ node, onClose, onPrune, onUnprune, onFlag, onDirectionsGenerated, onAiUnavailable, sessionId, prunedClusters = [], aiAvailable = true, allNodes, onFindSimilar, findingSimilar = false, isLoggedIn = false, onDrillCluster, drilling = false }: Props) {
   const [hasByokKey, setHasByokKey] = useState(false)
 
   useEffect(() => {
@@ -561,7 +587,7 @@ export default function RightSidebar({ node, onClose, onPrune, onUnprune, onFlag
           </div>
           <div className="p-4 flex-1">
             {node.nodeType === 'paper' && <PaperDetail node={node as PaperNode} onFindSimilar={onFindSimilar} findingSimilar={findingSimilar} />}
-            {node.nodeType === 'cluster' && <ClusterDetail node={node as ClusterNode} onPrune={onPrune} onUnprune={onUnprune} onDirectionsGenerated={onDirectionsGenerated} onAiUnavailable={onAiUnavailable} sessionId={sessionId} prunedClusters={prunedClusters} aiAvailable={aiAvailable} hasByokKey={hasByokKey} allNodes={allNodes} />}
+            {node.nodeType === 'cluster' && <ClusterDetail node={node as ClusterNode} onPrune={onPrune} onUnprune={onUnprune} onDirectionsGenerated={onDirectionsGenerated} onAiUnavailable={onAiUnavailable} sessionId={sessionId} prunedClusters={prunedClusters} aiAvailable={aiAvailable} hasByokKey={hasByokKey} allNodes={allNodes} onDrillCluster={onDrillCluster} drilling={drilling} />}
             {node.nodeType === 'direction' && <DirectionDetail node={node as DirectionNode} onFlag={onFlag} />}
             {node.nodeType === 'outlier' && <OutlierDetail node={node as OutlierNode} onFlag={onFlag} onDirectionsGenerated={onDirectionsGenerated} onAiUnavailable={onAiUnavailable} sessionId={sessionId} aiAvailable={aiAvailable} hasByokKey={hasByokKey} allNodes={allNodes} />}
             {sessionId && (

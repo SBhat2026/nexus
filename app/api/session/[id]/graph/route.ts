@@ -11,13 +11,20 @@ export async function GET(
     const db = createServerClient()
 
     // Fetch all session data in parallel
-    const [sessionRes, papersRes, clustersRes, edgesRes, actionsRes] = await Promise.all([
+    const [sessionRes, papersRes, clustersRes, edgesRes, actionsRes, childrenRes] = await Promise.all([
       db.from('sessions').select('*').eq('id', sessionId).single(),
       db.from('papers').select('*').eq('session_id', sessionId),
       db.from('clusters').select('*').eq('session_id', sessionId),
       db.from('edges').select('*').eq('session_id', sessionId),
       db.from('human_actions').select('*').eq('session_id', sessionId).order('created_at'),
+      db.from('sessions').select('parent_cluster_id').eq('parent_session_id', sessionId),
     ])
+
+    // Tally how many child (drill-down) sessions were spawned from each cluster.
+    const drilldownCounts = new Map<string, number>()
+    ;(childrenRes.data ?? []).forEach((c: { parent_cluster_id: string | null }) => {
+      if (c.parent_cluster_id) drilldownCounts.set(c.parent_cluster_id, (drilldownCounts.get(c.parent_cluster_id) ?? 0) + 1)
+    })
 
     if (sessionRes.error || !sessionRes.data) {
       return Response.json({ error: 'Session not found' }, { status: 404 })
@@ -51,6 +58,7 @@ export async function GET(
         umapX: c.umap_x ?? undefined,
         umapY: c.umap_y ?? undefined,
         medianYear: c.median_year ?? undefined,
+        drilldownCount: drilldownCounts.get(c.id) ?? 0,
       }
       nodes.push(clusterNode)
     })

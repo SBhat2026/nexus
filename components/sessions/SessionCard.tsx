@@ -12,9 +12,10 @@ interface Props {
   clusterCount: number
   paperCount: number
   dataSource?: string | null
+  depth?: number
 }
 
-export default function SessionCard({ id, seedTopic, date, clusterCount, paperCount, dataSource }: Props) {
+export default function SessionCard({ id, seedTopic, date, clusterCount, paperCount, dataSource, depth = 0 }: Props) {
   const router = useRouter()
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -34,7 +35,14 @@ export default function SessionCard({ id, seedTopic, date, clusterCount, paperCo
   return (
     <div className="group relative flex items-center gap-3 rounded-xl border border-slate-200 hover:border-blue-300 hover:bg-slate-50 transition">
       <Link href={`/session/${id}`} className="flex flex-1 flex-col gap-1 p-4 min-w-0">
-        <span className="font-medium text-slate-900 truncate">{seedTopic}</span>
+        <span className="font-medium text-slate-900 truncate">
+          {depth > 0 && (
+            <span className="mr-2 inline-flex items-center rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-600 align-middle">
+              drill-down · depth {depth}
+            </span>
+          )}
+          {seedTopic}
+        </span>
         <span className="text-xs text-slate-400">
           {date} · {clusterCount} clusters · {paperCount} papers
           {dataSource && dataSource !== 'openalex' && (
