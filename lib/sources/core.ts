@@ -1,4 +1,5 @@
 import type { SourceWork } from './types'
+import { stripHtml } from '@/lib/sanitize'
 
 interface CoreAuthor {
   name: string
@@ -31,7 +32,7 @@ export async function fetchPapersFromCore(query: string, limit: number): Promise
   const data: CoreResponse = await res.json()
   return (data.results ?? []).map((r) => ({
     id: `core:${r.id}`,
-    title: r.title ?? '',
+    title: stripHtml(r.title),
     abstract: r.abstract ?? null,
     authors: r.authors?.map((a) => a.name) ?? [],
     year: r.yearPublished ?? null,

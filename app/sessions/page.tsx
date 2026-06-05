@@ -15,12 +15,14 @@ export default async function SessionsPage() {
   }
 
   const db = createServerClient()
-  const { data: sessions } = await db
+  // Saved, not soft-deleted, owned by the current auth user, most-recently-touched first.
+  const { data: sessions, error: sessionsError } = await db
     .from('sessions')
     .select(`
       id,
       seed_topic,
       created_at,
+      updated_at,
       data_source,
       depth,
       clusters(count),
@@ -28,7 +30,12 @@ export default async function SessionsPage() {
     `)
     .eq('user_id', user.id)
     .eq('is_saved', true)
-    .order('created_at', { ascending: false })
+    .is('deleted_at', null)
+    .order('updated_at', { ascending: false })
+
+  if (sessionsError) {
+    console.error('[sessions] query failed:', sessionsError.message)
+  }
 
   const { data: profile } = await db
     .from('profiles')

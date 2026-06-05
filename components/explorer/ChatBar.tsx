@@ -7,7 +7,10 @@ import type { GraphNode, ClusterNode, DirectionNode } from '@/lib/types'
 import type { GraphData, GraphEditAction, GraphEditResult } from '@/lib/types'
 import GraphEditPreview from './GraphEditPreview'
 
-const MAX_NODES = 50
+// Raised from 50 → 200: 50 blocked real research sessions. D3's force sim stays
+// smooth well past 200 nodes here (only collision + a few edge forces run), so the
+// higher ceiling is safe; revisit if sessions routinely exceed several hundred nodes.
+const MAX_NODES = 200
 
 interface Message {
   role: 'user' | 'assistant'
@@ -30,6 +33,8 @@ interface Props {
   isDark?: boolean
   onDeselect?: () => void
   onGraphEdit?: (result: GraphEditResult) => void
+  onChatActivity?: (messages: { role: 'user' | 'assistant'; content: string }[]) => void
+  initialMessages?: { role: 'user' | 'assistant'; content: string }[]
 }
 
 function labelFor(node: GraphNode): string {
@@ -57,9 +62,12 @@ export default function ChatBar({
   prunedClusters,
   onDeselect,
   onGraphEdit,
+  onChatActivity,
+  initialMessages,
 }: Props) {
   const router = useRouter()
   const [messages, setMessages] = useState<Message[]>([])
+  const seededRef = useRef(false)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [navigating, setNavigating] = useState<string | null>(null)
@@ -67,6 +75,15 @@ export default function ChatBar({
   const [applying, setApplying] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Seed the transcript once from the auto-saved history on first load.
+  useEffect(() => {
+    if (seededRef.current) return
+    if (initialMessages && initialMessages.length > 0) {
+      setMessages(initialMessages.map((m) => ({ role: m.role, content: m.content })))
+      seededRef.current = true
+    }
+  }, [initialMessages])
 
   const hasMessages = messages.length > 0
 
@@ -77,6 +94,14 @@ export default function ChatBar({
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
+  }, [messages, loading])
+
+  // Auto-save the transcript once each exchange settles (last message is the assistant's).
+  useEffect(() => {
+    if (loading || messages.length === 0) return
+    if (messages[messages.length - 1].role !== 'assistant') return
+    onChatActivity?.(messages.map((m) => ({ role: m.role, content: m.content })))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, loading])
 
   async function send() {
@@ -237,7 +262,7 @@ export default function ChatBar({
       <div
         className="flex flex-col overflow-hidden"
         style={{
-          maxHeight: hasMessages ? '44vh' : 0,
+          maxHeight: hasMessages ? '40vh' : 0,
           transition: 'max-height 0.3s ease-in-out',
         }}
       >

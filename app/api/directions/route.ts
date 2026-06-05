@@ -4,6 +4,8 @@ import { createServerClient } from '@/lib/supabase/server'
 import { generateDirectionsClaude } from '@/lib/anthropic/generateDirections'
 import { generateDirectionsGroq } from '@/lib/groq/generateDirections'
 import type { DirectionDraft, DirectionsResult, ClusterContext } from '@/lib/anthropic/generateDirections'
+import { scoreDirectionIndependently, type ClosestPaper } from '@/lib/anthropic/scoreDirection'
+import { searchWorks, oaId } from '@/lib/openalex/client'
 import type { DirectionNode, GraphEdge } from '@/lib/types'
 
 export const maxDuration = 30
@@ -174,7 +176,38 @@ export async function POST(req: NextRequest) {
 
     const drafts: DirectionDraft[] = result.drafts
 
-    const directionRows = drafts.map((d) => ({
+    // ── Per-direction independent scoring ──────────────────────────────────────
+    // Each direction gets its OWN back-search (queried by its own title) and its OWN
+    // novelty + feasibility call, seeded only with that direction's title/description/
+    // methodology and its 3 closest papers — never the shared cluster context. This
+    // replaces the single batched estimate that made every direction inherit the same
+    // novelty reading.
+    const scored = await Promise.all(drafts.map(async (d) => {
+      let closest: ClosestPaper[] = []
+      let closestIds: string[] = []
+      try {
+        const works = await searchWorks(`${d.title} ${d.description}`.slice(0, 400), 5, { recentRatio: 0 })
+        closest = works.slice(0, 3).map((w) => ({
+          title: w.title ?? '',
+          year: w.publication_year ?? null,
+          citationCount: w.cited_by_count ?? 0,
+        }))
+        closestIds = works.slice(0, 3).map((w) => oaId(w.id))
+      } catch { /* back-search best-effort */ }
+
+      const independent = await scoreDirectionIndependently(
+        { title: d.title, description: d.description, methodology: d.suggestedNextSteps },
+        closest,
+        userAnthropicKey,
+      )
+      const draft: DirectionDraft = independent
+        ? { ...d, noveltyScore: independent.noveltyScore, feasibilityScore: independent.feasibilityScore }
+        : d
+      return { draft, closestIds }
+    }))
+    const finalDrafts = scored.map((s) => s.draft)
+
+    const directionRows = finalDrafts.map((d, i) => ({
       id: randomUUID(),
       session_id: sessionId,
       parent_cluster_id: d.parentClusterId,
@@ -184,11 +217,16 @@ export async function POST(req: NextRequest) {
       novelty_score: d.noveltyScore,
       feasibility_score: d.feasibilityScore,
       suggested_next_steps: d.suggestedNextSteps,
+      closest_paper_ids: scored[i].closestIds,
       is_flagged: false,
       human_rating: null,
     }))
 
-    await db.from('directions').insert(directionRows)
+    // closest_paper_ids may not exist on very old schemas — degrade gracefully.
+    const { error: dirInsertErr } = await db.from('directions').insert(directionRows)
+    if (dirInsertErr) {
+      await db.from('directions').insert(directionRows.map(({ closest_paper_ids: _c, ...rest }) => { void _c; return rest }))
+    }
 
     const edgeRows = directionRows.map((dr) => ({
       session_id: sessionId,

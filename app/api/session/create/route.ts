@@ -312,12 +312,15 @@ export async function POST(req: NextRequest) {
     await writeProgress(sessionId, 'labeling', `Labeling ${pipeline.clusters.length} clusters`)
     const clusterInputs = pipeline.clusters.map((c) => ({
       clusterIndex: c.clusterIndex,
-      papers: c.memberIndices
-        .filter((i) => representativeIds.has(papersMapped[i].id))
+      // Label from the 5 MOST-CITED papers in the cluster — the most representative
+      // work — rather than a centroid/random sample, so names track the real subfield.
+      papers: [...c.memberIndices]
+        .sort((a, b) => papersMapped[b].citationCount - papersMapped[a].citationCount)
         .slice(0, 5)
         .map((i) => ({
           title: papersMapped[i].title,
           abstractPrefix: papersMapped[i].abstract.slice(0, 400),
+          citationCount: papersMapped[i].citationCount,
         })),
     }))
     let labelResult: LabelResult = { labels: [], ai_available: false, reason: 'error' }

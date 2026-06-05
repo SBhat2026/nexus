@@ -22,6 +22,7 @@ interface Props {
   goingDeeper?: boolean
   reclustering?: boolean
   onRerunDomain?: (forcedDomain: string) => void | Promise<void>
+  onUnpruneCluster?: (clusterId: string) => void
   width?: number
 }
 
@@ -41,6 +42,7 @@ export default function LeftSidebar({
   goingDeeper = false,
   reclustering = false,
   onRerunDomain,
+  onUnpruneCluster,
   width,
 }: Props) {
   const {
@@ -48,7 +50,7 @@ export default function LeftSidebar({
     expandedClusters, toggleCluster, focusedClusterId, setFocusedCluster,
     paperFilters, hideRead, toggleAuthorFilter, toggleVenueFilter,
     setYearRangeFilter, clearPaperFilters, setHideRead, sourceProvider,
-    sourceIntelligence,
+    sourceIntelligence, layerToggles, toggleLayer,
   } = useSessionStore()
   const [editingName, setEditingName] = useState(false)
   const [nameValue, setNameValue] = useState(sessionName)
@@ -170,6 +172,7 @@ export default function LeftSidebar({
     (hideRead ? 1 : 0)
 
   const canGoDeeper = selectedNodeType === 'paper' || selectedNodeType === 'outlier'
+  const hasDirections = (allNodes ?? []).some((n) => n.nodeType === 'direction')
 
   return (
     <aside
@@ -576,6 +579,31 @@ export default function LeftSidebar({
         </div>
       )}
 
+      {/* Show / hide research directions — pure visibility filter on the D3 layer;
+          direction data is preserved. Only shown once directions exist. */}
+      {hasDirections && (
+        <div className="border-b border-slate-200 dark:border-slate-700/60 shrink-0 px-3 py-2">
+          <label className="flex items-center justify-between cursor-pointer">
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Show directions</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={layerToggles.directions}
+              onClick={() => toggleLayer('directions')}
+              className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+                layerToggles.directions ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-600'
+              }`}
+            >
+              <span
+                className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                  layerToggles.directions ? 'translate-x-3.5' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </label>
+        </div>
+      )}
+
       {/* Clusters section */}
       <div className="flex-1 min-h-0 overflow-y-auto border-b border-slate-200 dark:border-slate-700/60">
         <div className="px-3 pt-3 pb-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1.5 sticky top-0 bg-white dark:bg-slate-900 z-10">
@@ -603,7 +631,7 @@ export default function LeftSidebar({
                       .sort((a, b) => b.citationCount - a.citationCount)
                     return (
                       <div key={c.id}>
-                        <div className="flex items-center gap-1">
+                        <div className={`flex items-center gap-1 ${c.isPruned ? 'opacity-40' : ''}`}>
                           <button
                             onClick={() => { onJumpToNode(c.id); toggleCluster(c.id) }}
                             className="shrink-0 p-0.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition"
@@ -615,11 +643,20 @@ export default function LeftSidebar({
                           </button>
                           <button
                             onClick={() => onJumpToNode(c.id)}
-                            className="flex-1 text-left py-1 truncate text-xs text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition"
+                            className="flex-1 min-w-0 text-left py-1 truncate text-xs text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition"
                           >
-                            <span className="font-medium">{c.label}</span>
+                            <span className={`font-medium ${c.isPruned ? 'line-through' : ''}`}>{c.label}</span>
                             <span className="text-slate-400 dark:text-slate-500 ml-1.5">{c.paperCount}</span>
                           </button>
+                          {c.isPruned && onUnpruneCluster && (
+                            <button
+                              onClick={() => onUnpruneCluster(c.id)}
+                              className="shrink-0 text-[10px] text-blue-500 dark:text-blue-400 hover:underline px-1"
+                              title="Restore this pruned cluster"
+                            >
+                              Restore
+                            </button>
+                          )}
                         </div>
                         {isExpanded && clPapers.length > 0 && (
                           <div className="ml-5 mt-0.5 space-y-px pb-1">

@@ -2,6 +2,11 @@ import { NextRequest } from 'next/server'
 import Groq from 'groq-sdk'
 import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
+import { createServerClient } from '@/lib/supabase/server'
+import { bestTitleSimilarity } from '@/lib/fuzzy'
+
+// A proposed paper must match a real title in the session corpus at least this well.
+const PAPER_MATCH_THRESHOLD = 0.8
 
 export const maxDuration = 30
 
@@ -223,7 +228,32 @@ Use real ids from the lists above for removals and edges. Be conservative with c
       ;({ text, action, graphActions } = parseJSON(raw))
     }
 
-    void sessionId
+    // ── Paper verification ─────────────────────────────────────────────────────
+    // The assistant may only propose papers that were actually fetched for this
+    // session. Cross-reference each proposed paper title against the corpus
+    // (fuzzy match ≥ 0.8); drop any that don't match and tell the user, so the
+    // model can't hallucinate titles that aren't in the database.
+    if (sessionId && graphActions.some((a) => a.type === 'add_node' && a.nodeType === 'paper')) {
+      try {
+        const db = createServerClient()
+        const { data: corpus } = await db.from('papers').select('title').eq('session_id', sessionId)
+        const titles = (corpus ?? []).map((p) => p.title as string).filter(Boolean)
+        let rejected = 0
+        graphActions = graphActions.filter((a) => {
+          if (a.type !== 'add_node' || a.nodeType !== 'paper') return true
+          const ok = titles.length > 0 && bestTitleSimilarity(a.label, titles) >= PAPER_MATCH_THRESHOLD
+          if (!ok) rejected++
+          return ok
+        })
+        if (rejected > 0) {
+          const note = "I don't have that paper in this session's corpus — I can only reference papers that were fetched for this topic."
+          text = text ? `${text}\n\n${note}` : note
+        }
+      } catch (e) {
+        console.warn('[api/chat] paper verification skipped:', e)
+      }
+    }
+
     return Response.json({ text, action, graphActions })
   } catch (err) {
     console.error('[api/chat]', err)

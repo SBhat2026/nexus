@@ -30,6 +30,32 @@ const FIELD_COLORS: Record<string, string> = {
   default: '#64748b',
 }
 
+// Nudge a candidate (x, y) outward in a growing spiral until it no longer collides
+// with any already-placed node. Used for every NEW node (directions, Go Deeper /
+// Drill clusters & papers, AI-added nodes) that lacks UMAP coordinates, so they don't
+// land on top of existing nodes.
+function findNonOverlappingPosition(
+  existingNodes: { x: number; y: number }[],
+  candidateX: number,
+  candidateY: number,
+  minDistance = 120,
+): { x: number; y: number } {
+  let x = candidateX, y = candidateY
+  let attempts = 0
+  while (attempts < 50) {
+    const overlaps = existingNodes.some(
+      (n) => Math.sqrt((n.x - x) ** 2 + (n.y - y) ** 2) < minDistance,
+    )
+    if (!overlaps) return { x, y }
+    const angle = Math.random() * 2 * Math.PI
+    const radius = minDistance + attempts * 10
+    x = candidateX + Math.cos(angle) * radius
+    y = candidateY + Math.sin(angle) * radius
+    attempts++
+  }
+  return { x, y }
+}
+
 function hexagonPoints(cx: number, cy: number, r: number): string {
   return Array.from({ length: 6 }, (_, i) => {
     const angle = (Math.PI / 3) * i - Math.PI / 6
@@ -121,9 +147,9 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
       } else if (n.nodeType === 'outlier') {
         if (!layerToggles.outliers) return
         if (!top2OutlierIds.has(n.id)) return
-      } else if (n.nodeType === 'cluster') {
-        if (pruned.has(n.id) && !layerToggles.pruned) return
       }
+      // Pruned clusters are NOT removed — they stay on the canvas at reduced
+      // opacity (applied below) so users can see and recover what they pruned.
       ids.add(n.id)
     })
     return ids
@@ -187,6 +213,10 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
     const scaleX = d3.scaleLinear().domain([0, 1]).range([pad, width - pad])
     const scaleY = d3.scaleLinear().domain([0, 1]).range([pad, height - pad])
 
+    // Pass 1: position every node that has UMAP coords (or the whole-graph radial
+    // fallback when none do), recording each placement for collision checks.
+    const placed: { x: number; y: number }[] = []
+    const placedById = new Map<string, { x: number; y: number }>()
     nodes.forEach((n, i) => {
       if (n.umapX !== undefined && n.umapY !== undefined) {
         n.fx = scaleX(n.umapX)
@@ -197,7 +227,36 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
         const r = Math.min(width, height) * 0.35
         n.fx = width / 2 + r * Math.cos(angle)
         n.fy = height / 2 + r * Math.sin(angle)
+      } else {
+        return // defer to pass 2
       }
+      const pos = { x: n.fx as number, y: n.fy as number }
+      placed.push(pos)
+      placedById.set(n.id, pos)
+    })
+
+    // Pass 2: new nodes that lack UMAP coords (directions, expanded clusters/papers,
+    // AI-added nodes). Anchor near their parent cluster when known, else canvas centre,
+    // then resolve overlaps so nothing lands on an existing node.
+    nodes.forEach((n) => {
+      if (n.fx != null && n.fy != null) return
+      const parentId =
+        (n as DirectionNode).parentClusterId ??
+        (n as PaperNode).clusterId ??
+        (n as OutlierNode).nearestClusterId ??
+        null
+      const anchor = (parentId && placedById.get(parentId)) || { x: width / 2, y: height / 2 }
+      const jitter = Math.random() * 2 * Math.PI
+      const pos = findNonOverlappingPosition(
+        placed,
+        anchor.x + Math.cos(jitter) * 80,
+        anchor.y + Math.sin(jitter) * 80,
+        120,
+      )
+      n.fx = pos.x
+      n.fy = pos.y
+      placed.push(pos)
+      placedById.set(n.id, pos)
     })
 
     const nodeSet = new Set(nodes.map((n) => n.id))
@@ -356,16 +415,16 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
           .attr('stroke', '#f59e0b')
           .attr('stroke-width', 2)
 
-        // Direction title above
+        // Direction title above — sits clear of the (padded) selection ring
         const shortTitle = dd.title.length > 22 ? dd.title.slice(0, 20) + '…' : dd.title
         el.append('rect')
-          .attr('x', -52).attr('y', -32)
+          .attr('x', -52).attr('y', -36)
           .attr('width', 104).attr('height', 13)
           .attr('rx', 2)
           .attr('fill', isDark ? 'rgba(15,23,42,0.6)' : 'rgba(255,255,255,0.8)')
         el.append('text')
           .text(shortTitle)
-          .attr('text-anchor', 'middle').attr('dy', -21)
+          .attr('text-anchor', 'middle').attr('dy', -25)
           .attr('fill', isDark ? '#fcd34d' : '#92400e').attr('font-size', 9).attr('font-weight', '600')
 
       } else if (d.nodeType === 'outlier') {
@@ -374,14 +433,19 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
         el.append('circle').attr('r', 7).attr('fill', '#f9731633').attr('stroke', '#f97316').attr('stroke-width', 2)
       }
 
-      // Selection ring
+      // Selection ring — radius = shape radius + 4px padding so it never clips the
+      // node or its title.
       el.append('circle')
         .attr('class', 'select-ring')
-        .attr('r', d.nodeType === 'cluster' ? 36 : d.nodeType === 'direction' ? 24 : 14)
+        .attr('r', d.nodeType === 'cluster' ? 36 : d.nodeType === 'direction' ? 22 : 14)
         .attr('fill', 'none')
         .attr('stroke', isDark ? '#e2e8f0' : '#1e293b')
         .attr('stroke-width', 2)
         .attr('opacity', 0)
+
+      // Keep labels/backgrounds above the selection ring so the ring never crosses
+      // the title text (z-order: text on top).
+      el.selectAll<SVGGraphicsElement, unknown>('rect,text').raise()
 
       // Hover tooltip — paper and outlier nodes only
       if (d.nodeType === 'paper' || d.nodeType === 'outlier') {
@@ -434,7 +498,7 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
       .attr('stroke-opacity', 0.25)
     nodeSel.attr('opacity', 0)
       .transition().duration(250)
-      .attr('opacity', 1)
+      .attr('opacity', (d) => (d.nodeType === 'cluster' && pruned.has(d.id)) ? 0.3 : 1)
 
     sim.on('tick', () => {
       edgeSel
@@ -481,6 +545,9 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
         .attr('opacity', (d) => {
           let opacity = 1
 
+          // Pruned clusters stay dimmed (kept visible for recovery)
+          if (d.nodeType === 'cluster' && pruned.has(d.id)) opacity = Math.min(opacity, 0.3)
+
           // Focus mode
           if (focusedClusterId && d.nodeType !== 'direction') {
             const clId = d.nodeType === 'cluster'
@@ -516,7 +583,7 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
       return () => clearTimeout(handle)
     }
     applyOpacity()
-  }, [focusedClusterId, readPaperIds, paperFilters, hideRead, visibleNodeIds])
+  }, [focusedClusterId, readPaperIds, paperFilters, hideRead, visibleNodeIds, pruned])
 
   return (
     <div

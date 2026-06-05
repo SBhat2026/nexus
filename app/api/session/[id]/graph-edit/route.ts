@@ -4,7 +4,9 @@ import { createServerClient } from '@/lib/supabase/server'
 import type { GraphEditAction, GraphEditResult, GraphNode, GraphEdge, ClusterNode, PaperNode } from '@/lib/types'
 
 const MAX_ACTIONS = 3
-const MAX_NODES = 50
+// Raised from 50 → 200 to match the client. 50 was too low for real research
+// sessions; the D3 force sim handles 200 nodes comfortably.
+const MAX_NODES = 200
 
 /**
  * POST /api/session/[id]/graph-edit

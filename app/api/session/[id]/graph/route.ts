@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
-import type { GraphData, PaperNode, ClusterNode, OutlierNode, GraphEdge } from '@/lib/types'
+import type { GraphData, PaperNode, ClusterNode, OutlierNode, DirectionNode, GraphEdge } from '@/lib/types'
 
 export async function GET(
   _req: NextRequest,
@@ -11,13 +11,14 @@ export async function GET(
     const db = createServerClient()
 
     // Fetch all session data in parallel
-    const [sessionRes, papersRes, clustersRes, edgesRes, actionsRes, childrenRes] = await Promise.all([
+    const [sessionRes, papersRes, clustersRes, edgesRes, actionsRes, childrenRes, directionsRes] = await Promise.all([
       db.from('sessions').select('*').eq('id', sessionId).single(),
       db.from('papers').select('*').eq('session_id', sessionId),
       db.from('clusters').select('*').eq('session_id', sessionId),
       db.from('edges').select('*').eq('session_id', sessionId),
       db.from('human_actions').select('*').eq('session_id', sessionId).order('created_at'),
       db.from('sessions').select('parent_cluster_id').eq('parent_session_id', sessionId),
+      db.from('directions').select('*').eq('session_id', sessionId),
     ])
 
     // Tally how many child (drill-down) sessions were spawned from each cluster.
@@ -48,7 +49,8 @@ export async function GET(
       const clusterNode: ClusterNode = {
         id: c.id,
         nodeType: 'cluster',
-        label: c.label,
+        // User rename wins over the AI label everywhere it's shown.
+        label: c.custom_label ?? c.label,
         description: c.description ?? '',
         paperCount: c.paper_count,
         field: c.field ?? 'default',
@@ -106,6 +108,26 @@ export async function GET(
       }
     })
 
+    // Direction nodes (AI-generated research directions) — persisted in `directions`;
+    // their generated_from edges already live in the edges table. Without this they
+    // would vanish on every reload.
+    ;(directionsRes.data ?? []).forEach((d) => {
+      const dir: DirectionNode = {
+        id: d.id,
+        nodeType: 'direction',
+        title: d.title,
+        description: d.description ?? '',
+        noveltyScore: d.novelty_score ?? 5,
+        feasibilityScore: d.feasibility_score ?? 5,
+        parentClusterId: d.parent_cluster_id ?? null,
+        isFlagged: flaggedNodes.has(d.id) || (d.is_flagged ?? false),
+        humanRating: d.human_rating ?? null,
+        rationale: d.rationale ?? undefined,
+        suggestedNextSteps: Array.isArray(d.suggested_next_steps) ? d.suggested_next_steps : undefined,
+      }
+      nodes.push(dir)
+    })
+
     const edges: GraphEdge[] = (edgesRes.data ?? []).map((e) => ({
       id: e.id,
       source: e.source_id,
@@ -125,6 +147,8 @@ export async function GET(
       flaggedNodeIds: [...flaggedNodes],
       // Source Intelligence panel survives reload (jsonb persisted at create time).
       sourceIntelligence: sessionRes.data.source_intelligence ?? null,
+      // Chat transcript (auto-saved) so the assistant conversation survives reload.
+      chatHistory: Array.isArray(sessionRes.data.chat_history) ? sessionRes.data.chat_history : [],
     })
   } catch (err) {
     console.error('[session/graph]', err)

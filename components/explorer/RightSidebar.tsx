@@ -1,7 +1,7 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, Flag, Scissors, ExternalLink, BookOpen, Zap, Loader2, Focus, BookMarked, Building2, ZoomIn } from 'lucide-react'
+import { X, Flag, Scissors, ExternalLink, BookOpen, Zap, Loader2, Focus, BookMarked, Building2, ZoomIn, Pencil, Check } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { GraphNode, PaperNode, ClusterNode, DirectionNode, OutlierNode, GraphEdge } from '@/lib/types'
@@ -24,6 +24,7 @@ interface Props {
   isLoggedIn?: boolean
   onDrillCluster?: (clusterId: string) => void
   drilling?: boolean
+  onRenameCluster?: (clusterId: string, label: string) => void
 }
 
 
@@ -155,6 +156,7 @@ function ClusterDetail({
   allNodes,
   onDrillCluster,
   drilling = false,
+  onRenameCluster,
 }: {
   node: ClusterNode
   onPrune: (id: string, reason: string) => void
@@ -168,13 +170,22 @@ function ClusterDetail({
   allNodes?: GraphNode[]
   onDrillCluster?: (clusterId: string) => void
   drilling?: boolean
+  onRenameCluster?: (clusterId: string, label: string) => void
 }) {
   const [pruneReason, setPruneReason] = useState('')
   const [showPruneInput, setShowPruneInput] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState(node.label)
   const { focusedClusterId, setFocusedCluster } = useSessionStore()
   const isFocused = focusedClusterId === node.id
+
+  function commitRename() {
+    const next = nameDraft.trim()
+    setEditingName(false)
+    if (next && next !== node.label) onRenameCluster?.(node.id, next)
+  }
 
   async function handleGenerateDirections() {
     if (!sessionId || generating) return
@@ -242,7 +253,36 @@ function ClusterDetail({
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{node.label}</h3>
+        {editingName ? (
+          <div className="flex items-center gap-1.5">
+            <input
+              autoFocus
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitRename()
+                if (e.key === 'Escape') setEditingName(false)
+              }}
+              className="flex-1 min-w-0 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-100 px-2 py-0.5 rounded border border-blue-300 dark:border-blue-600 outline-none"
+            />
+            <button onMouseDown={(e) => e.preventDefault()} onClick={commitRename}
+              className="shrink-0 p-1 rounded text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition" title="Save name">
+              <Check className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="group flex items-center gap-1.5">
+            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{node.label}</h3>
+            <button
+              onClick={() => { setNameDraft(node.label); setEditingName(true) }}
+              className="shrink-0 p-0.5 rounded text-slate-300 dark:text-slate-600 hover:text-blue-600 dark:hover:text-blue-400 opacity-0 group-hover:opacity-100 transition"
+              title="Rename cluster"
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
+          </div>
+        )}
         <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
           {node.paperCount} papers
           {node.medianYear ? ` · median ${node.medianYear}` : ''}
@@ -554,7 +594,7 @@ function OutlierDetail({
   )
 }
 
-export default function RightSidebar({ node, onClose, onPrune, onUnprune, onFlag, onDirectionsGenerated, onAiUnavailable, sessionId, prunedClusters = [], aiAvailable = true, allNodes, onFindSimilar, findingSimilar = false, isLoggedIn = false, onDrillCluster, drilling = false }: Props) {
+export default function RightSidebar({ node, onClose, onPrune, onUnprune, onFlag, onDirectionsGenerated, onAiUnavailable, sessionId, prunedClusters = [], aiAvailable = true, allNodes, onFindSimilar, findingSimilar = false, isLoggedIn = false, onDrillCluster, drilling = false, onRenameCluster }: Props) {
   const [hasByokKey, setHasByokKey] = useState(false)
 
   useEffect(() => {
@@ -587,7 +627,7 @@ export default function RightSidebar({ node, onClose, onPrune, onUnprune, onFlag
           </div>
           <div className="p-4 flex-1">
             {node.nodeType === 'paper' && <PaperDetail node={node as PaperNode} onFindSimilar={onFindSimilar} findingSimilar={findingSimilar} />}
-            {node.nodeType === 'cluster' && <ClusterDetail node={node as ClusterNode} onPrune={onPrune} onUnprune={onUnprune} onDirectionsGenerated={onDirectionsGenerated} onAiUnavailable={onAiUnavailable} sessionId={sessionId} prunedClusters={prunedClusters} aiAvailable={aiAvailable} hasByokKey={hasByokKey} allNodes={allNodes} onDrillCluster={onDrillCluster} drilling={drilling} />}
+            {node.nodeType === 'cluster' && <ClusterDetail node={node as ClusterNode} onPrune={onPrune} onUnprune={onUnprune} onDirectionsGenerated={onDirectionsGenerated} onAiUnavailable={onAiUnavailable} sessionId={sessionId} prunedClusters={prunedClusters} aiAvailable={aiAvailable} hasByokKey={hasByokKey} allNodes={allNodes} onDrillCluster={onDrillCluster} drilling={drilling} onRenameCluster={onRenameCluster} />}
             {node.nodeType === 'direction' && <DirectionDetail node={node as DirectionNode} onFlag={onFlag} />}
             {node.nodeType === 'outlier' && <OutlierDetail node={node as OutlierNode} onFlag={onFlag} onDirectionsGenerated={onDirectionsGenerated} onAiUnavailable={onAiUnavailable} sessionId={sessionId} aiAvailable={aiAvailable} hasByokKey={hasByokKey} allNodes={allNodes} />}
             {sessionId && (

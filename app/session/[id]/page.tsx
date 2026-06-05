@@ -58,6 +58,31 @@ export default function SessionPage({ params }: PageProps) {
   const [showSignInModal, setShowSignInModal] = useState(false)
   const [showGoDeepGate, setShowGoDeepGate] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [autoSaved, setAutoSaved] = useState(false)
+  const [initialChat, setInitialChat] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
+  const chatHistoryRef = useRef<{ role: string; content: string }[]>([])
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Incremental auto-save: persist chat history + bump updated_at/last_seen so work is
+  // preserved and the session sorts to the top of /sessions. Called after every
+  // significant change (directions, chat, prune, rename, AI/assistant edits). Cluster
+  // labels, directions and pruning persist to their own tables on each action; this
+  // also flashes a brief "Auto-saved" indicator in the header.
+  const touchSession = useCallback(async (_reason?: string) => {
+    try {
+      await fetch(`/api/session/${id}/touch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
+        body: JSON.stringify({ chatHistory: chatHistoryRef.current }),
+      })
+      setAutoSaved(true)
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+      autoSaveTimerRef.current = setTimeout(() => setAutoSaved(false), 3000)
+    } catch {
+      /* best-effort */
+    }
+  }, [id])
 
   const startLeftResize = useCallback((e: React.PointerEvent) => {
     e.preventDefault()
@@ -110,11 +135,17 @@ export default function SessionPage({ params }: PageProps) {
     }
     setSaving(true)
     try {
-      await fetch(`/api/session/${id}/save`, { method: 'PATCH' })
+      const res = await fetch(`/api/session/${id}/save`, { method: 'PATCH' })
+      if (!res.ok) {
+        flashToast('error', 'Couldn’t save the session — please try again.')
+        return
+      }
       setIsSaved(true)
       if (typeof window !== 'undefined') {
         sessionStorage.setItem(`nexus_saved_${id}`, '1')
       }
+      // Persist current chat + bump updated_at so it appears at the top of /sessions.
+      void touchSession('Saved')
     } finally {
       setSaving(false)
     }
@@ -218,6 +249,10 @@ export default function SessionPage({ params }: PageProps) {
           setSession(id, t)
           setGraphData(data.graph)
           setStatus('ready')
+          if (Array.isArray(data.chatHistory) && data.chatHistory.length) {
+            setInitialChat(data.chatHistory)
+            chatHistoryRef.current = data.chatHistory
+          }
           if (data.readPaperIds?.length) setReadPaperIds(data.readPaperIds)
           seedCurationFromArrays(
             data.prunedClusterIds ?? [],
@@ -393,6 +428,7 @@ export default function SessionPage({ params }: PageProps) {
   function handlePrune(clusterId: string, reason: string) {
     commitHistory()
     autoCheckpoint('Before prune')
+    void touchSession('Pruned cluster')
     setPruned((prev) => { const s = new Set(prev); s.add(clusterId); return s })
     setPrunedReasons((prev) => new Map(prev).set(clusterId, reason))
     setSelectedNode((prev) => prev?.id === clusterId ? { ...prev, isPruned: true, pruneReason: reason } as typeof prev : prev)
@@ -407,6 +443,7 @@ export default function SessionPage({ params }: PageProps) {
 
   function handleUnprune(clusterId: string) {
     commitHistory()
+    void touchSession('Restored cluster')
     const prevReason = prunedReasons.get(clusterId)
     setPruned((prev) => { const s = new Set(prev); s.delete(clusterId); return s })
     setPrunedReasons((prev) => { const m = new Map(prev); m.delete(clusterId); return m })
@@ -567,6 +604,7 @@ export default function SessionPage({ params }: PageProps) {
       try { sessionStorage.setItem(`nexus_graph_${id}`, JSON.stringify(updated)) } catch {}
       return updated
     })
+    void touchSession('Generated directions')
   }
 
   function handleGraphEdit(result: import('@/lib/types').GraphEditResult) {
@@ -586,7 +624,20 @@ export default function SessionPage({ params }: PageProps) {
       try { sessionStorage.setItem(`nexus_graph_${id}`, JSON.stringify(updated)) } catch {}
       return updated
     })
+    void touchSession('Applied AI edits')
   }
+
+  const handleRenameCluster = useCallback((clusterId: string, label: string) => {
+    // Optimistic: update canvas + side panel + cache immediately, persist in background.
+    patchNode(clusterId, { label })
+    setSelectedNode((prev) => prev?.id === clusterId ? { ...prev, label } as typeof prev : prev)
+    fetch(`/api/session/${id}/cluster`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clusterId, customLabel: label }),
+      keepalive: true,
+    }).then(() => void touchSession('Renamed cluster')).catch(() => {})
+  }, [id, patchNode])
 
   function handleAiUnavailable(reason: 'quota' | 'error') {
     setAiAvailable(false)
@@ -691,6 +742,11 @@ export default function SessionPage({ params }: PageProps) {
         className="absolute top-3 z-30 flex items-center gap-2 transition-[right] duration-[250ms]"
         style={{ right: (selectedNode ? rightWidth : 0) + 12 }}
       >
+        <span
+          className={`text-[11px] text-slate-400 dark:text-slate-500 select-none transition-opacity duration-500 ${autoSaved ? 'opacity-100' : 'opacity-0'}`}
+        >
+          Auto-saved
+        </span>
         <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm p-0.5 shadow-sm">
           <button
             onClick={() => history.undo()}
@@ -796,76 +852,87 @@ export default function SessionPage({ params }: PageProps) {
           goingDeeper={goingDeeper}
           reclustering={reclustering}
           onRerunDomain={handleRerunDomain}
+          onUnpruneCluster={handleUnprune}
           width={leftWidth}
         />
-        <div className="flex-1 relative overflow-hidden flex">
-          {/* left resize handle */}
-          <div
-            className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400/30 z-10 transition-colors"
-            onPointerDown={startLeftResize}
-          />
-          <GraphCanvas
-            ref={canvasRef}
-            data={graphData!}
-            layerToggles={layerToggles}
-            onSelectNode={handleSelectNode}
-            selectedNodeId={selectedNodeId}
-            pruned={pruned}
-            isDark={isDark}
-          />
-          {focusedClusterId ? (
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30">
-              <button
-                onClick={() => setFocusedCluster(null)}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium shadow-lg transition"
-              >
-                Exit focus mode
-              </button>
+        {/* Center+right column: canvas/right-sidebar row stacked above the chat drawer.
+            ChatBar lives INSIDE this column so it never covers Zone A (LeftSidebar),
+            which stays full-height and interactive while the chat is open. */}
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="flex flex-1 min-h-0 overflow-hidden">
+            <div className="flex-1 relative overflow-hidden flex">
+              {/* left resize handle */}
+              <div
+                className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400/30 z-10 transition-colors"
+                onPointerDown={startLeftResize}
+              />
+              <GraphCanvas
+                ref={canvasRef}
+                data={graphData!}
+                layerToggles={layerToggles}
+                onSelectNode={handleSelectNode}
+                selectedNodeId={selectedNodeId}
+                pruned={pruned}
+                isDark={isDark}
+              />
+              {focusedClusterId ? (
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30">
+                  <button
+                    onClick={() => setFocusedCluster(null)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium shadow-lg transition"
+                  >
+                    Exit focus mode
+                  </button>
+                </div>
+              ) : (
+                <div className="absolute top-3 left-4 z-30">
+                  <Breadcrumb sessionId={id} />
+                </div>
+              )}
+              {/* right resize handle */}
+              <div
+                className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400/30 z-10 transition-colors"
+                onPointerDown={startRightResize}
+              />
             </div>
-          ) : (
-            <div className="absolute top-3 left-4 z-30">
-              <Breadcrumb sessionId={id} />
+            <div style={{ width: selectedNode ? rightWidth : 0, transition: 'width 0.25s', overflow: 'hidden', flexShrink: 0 }}>
+              <div style={{ width: rightWidth }} className="h-full">
+                <RightSidebar
+                  node={selectedNode}
+                  onClose={() => handleSelectNode(null, null)}
+                  onPrune={handlePrune}
+                  onUnprune={handleUnprune}
+                  onFlag={handleFlag}
+                  sessionId={id}
+                  onDirectionsGenerated={handleDirectionsGenerated}
+                  onAiUnavailable={handleAiUnavailable}
+                  prunedClusters={prunedClusterList}
+                  aiAvailable={aiAvailable}
+                  allNodes={graphData?.nodes}
+                  onFindSimilar={handleGoDeeper}
+                  findingSimilar={goingDeeper}
+                  isLoggedIn={isLoggedIn}
+                  onDrillCluster={handleDrillCluster}
+                  drilling={drilling}
+                  onRenameCluster={handleRenameCluster}
+                />
+              </div>
             </div>
-          )}
-          {/* right resize handle */}
-          <div
-            className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400/30 z-10 transition-colors"
-            onPointerDown={startRightResize}
-          />
-        </div>
-        <div style={{ width: selectedNode ? rightWidth : 0, transition: 'width 0.25s', overflow: 'hidden', flexShrink: 0 }}>
-          <div style={{ width: rightWidth }} className="h-full">
-            <RightSidebar
-              node={selectedNode}
-              onClose={() => handleSelectNode(null, null)}
-              onPrune={handlePrune}
-              onUnprune={handleUnprune}
-              onFlag={handleFlag}
-              sessionId={id}
-              onDirectionsGenerated={handleDirectionsGenerated}
-              onAiUnavailable={handleAiUnavailable}
-              prunedClusters={prunedClusterList}
-              aiAvailable={aiAvailable}
-              allNodes={graphData?.nodes}
-              onFindSimilar={handleGoDeeper}
-              findingSimilar={goingDeeper}
-              isLoggedIn={isLoggedIn}
-              onDrillCluster={handleDrillCluster}
-              drilling={drilling}
-            />
           </div>
+          <ChatBar
+            sessionId={id}
+            seedTopic={seedTopic}
+            graphNodes={graphData?.nodes ?? []}
+            selectedNode={selectedNode}
+            prunedClusters={prunedClusterList}
+            isDark={isDark}
+            onDeselect={() => handleSelectNode(null, null)}
+            onGraphEdit={handleGraphEdit}
+            onChatActivity={(msgs) => { chatHistoryRef.current = msgs; void touchSession('Chat') }}
+            initialMessages={initialChat}
+          />
         </div>
       </div>
-      <ChatBar
-        sessionId={id}
-        seedTopic={seedTopic}
-        graphNodes={graphData?.nodes ?? []}
-        selectedNode={selectedNode}
-        prunedClusters={prunedClusterList}
-        isDark={isDark}
-        onDeselect={() => handleSelectNode(null, null)}
-        onGraphEdit={handleGraphEdit}
-      />
     </div>
   )
 }

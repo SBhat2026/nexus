@@ -3,6 +3,7 @@ import { oaId } from '@/lib/openalex/types'
 import type { SourceWork, SourceConcept } from './types'
 import { buildRetrievalPlan } from './decompose'
 import { blendRank, coverageScore, type PlannedQuery } from './queryPlanner'
+import { stripHtml } from '@/lib/sanitize'
 
 const MAILTO = 'siddhantbhat3@gmail.com'
 
@@ -26,7 +27,7 @@ interface OAResultWork {
 function mapWork(w: OAResultWork): ScoredWork {
   return {
     id: oaId(w.id),
-    title: w.title ?? '',
+    title: stripHtml(w.title),
     abstract: invertedIndexToAbstract(w.abstract_inverted_index ?? null),
     authors: w.authorships?.map((a) => a.author?.display_name).filter((n): n is string => !!n) ?? [],
     year: w.publication_year ?? null,
@@ -264,7 +265,7 @@ export async function fetchReferencesNormalized(
   const works = await fetchReferences(bareId, limit, opts)
   return works.map((w) => ({
     id: oaId(w.id),
-    title: w.title || '',
+    title: stripHtml(w.title),
     abstract: invertedIndexToAbstract(w.abstract_inverted_index),
     authors: w.authorships?.map((a) => a.author.display_name) ?? [],
     year: w.publication_year,
