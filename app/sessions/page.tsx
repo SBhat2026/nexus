@@ -15,10 +15,7 @@ export default async function SessionsPage() {
   }
 
   const db = createServerClient()
-  // Saved, not soft-deleted, owned by the current auth user, most-recently-touched first.
-  const { data: sessions, error: sessionsError } = await db
-    .from('sessions')
-    .select(`
+  const cols = `
       id,
       seed_topic,
       created_at,
@@ -27,14 +24,27 @@ export default async function SessionsPage() {
       depth,
       clusters(count),
       papers(count)
-    `)
+    `
+  // Saved, not soft-deleted, owned by the current auth user, most-recently-touched first.
+  let { data: sessions, error: sessionsError } = await db
+    .from('sessions')
+    .select(cols)
     .eq('user_id', user.id)
     .eq('is_saved', true)
     .is('deleted_at', null)
     .order('updated_at', { ascending: false })
 
+  // Graceful fallback if migration 0024 (deleted_at) hasn't been applied yet — don't
+  // let a missing column turn the saved list empty.
   if (sessionsError) {
-    console.error('[sessions] query failed:', sessionsError.message)
+    console.warn('[sessions] filtered query failed, retrying without deleted_at:', sessionsError.message)
+    ;({ data: sessions, error: sessionsError } = await db
+      .from('sessions')
+      .select(cols)
+      .eq('user_id', user.id)
+      .eq('is_saved', true)
+      .order('updated_at', { ascending: false }))
+    if (sessionsError) console.error('[sessions] query failed:', sessionsError.message)
   }
 
   const { data: profile } = await db
