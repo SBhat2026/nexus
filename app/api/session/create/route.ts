@@ -119,6 +119,12 @@ export async function POST(req: NextRequest) {
 
     // 2. Embeddings
     await writeProgress(sessionId, 'embedding', `Embedding ${newWorks.length} new papers (${existingIds.size} cached)`)
+    // Kick off the relevance seed-embed CONCURRENTLY with the paper batch. It shares
+    // the process-global Jina rate-limit window but is a single tiny input (~100
+    // tokens), so it rides along inside the same window instead of adding a serial
+    // round-trip to the critical path right before the relevance filter runs.
+    const seedText = detectedDomain ? `${detectedDomain}: ${seedTopic}` : seedTopic
+    const seedEmbedPromise = embedTexts([seedText]).then((r) => r[0] ?? null).catch(() => null)
     const papers = await getPapersWithEmbeddings(bareIds)
     let withEmbeddings = papers.filter((p) => p.embedding && p.embedding.length === 1024)
 
@@ -137,8 +143,7 @@ export async function POST(req: NextRequest) {
     let relevanceThreshold: number | null = null
     let relevanceWarning: string | null = null
     try {
-      const seedText = detectedDomain ? `${detectedDomain}: ${seedTopic}` : seedTopic
-      const [seedEmbedding] = await embedTexts([seedText])
+      const seedEmbedding = await seedEmbedPromise
       if (seedEmbedding && seedEmbedding.length === 1024) {
         const scored = withEmbeddings.map((p) => ({ p, score: cosineSimilarity(p.embedding as number[], seedEmbedding) }))
         let threshold = getRelevanceThreshold(withEmbeddings.length, classifySpecificity(seedTopic))
@@ -156,6 +161,11 @@ export async function POST(req: NextRequest) {
           withEmbeddings = kept.map((s) => s.p)
           console.log(`[Relevance filter] Kept ${kept.length} / ${totalFetched} papers (removed ${papersFiltered} below threshold ${threshold})`)
         }
+      } else {
+        // seedEmbedPromise resolved null/short (Jina error) — it swallows its own
+        // rejection now that it runs concurrently, so surface the same warning here.
+        relevanceWarning = 'Relevance filter unavailable (embedding error) — showing unfiltered results.'
+        console.warn('[Relevance filter] seed embedding unavailable — showing unfiltered results.')
       }
     } catch (err) {
       relevanceWarning = 'Relevance filter unavailable (embedding error) — showing unfiltered results.'
@@ -308,7 +318,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // AI cluster labeling — fire after insert, update rows if successful
+    // AI cluster labeling — START the (2–5s) label call now but DON'T await it yet.
+    // The paper/edge inserts below don't depend on labels, so we run them concurrently
+    // and join at the end, shaving the cheaper of the two off the critical path.
     await writeProgress(sessionId, 'labeling', `Labeling ${pipeline.clusters.length} clusters`)
     const clusterInputs = pipeline.clusters.map((c) => ({
       clusterIndex: c.clusterIndex,
@@ -323,25 +335,13 @@ export async function POST(req: NextRequest) {
           citationCount: papersMapped[i].citationCount,
         })),
     }))
-    let labelResult: LabelResult = { labels: [], ai_available: false, reason: 'error' }
-    try {
-      labelResult = await Promise.any([
-        labelClusters(clusterInputs, seedTopic).then((r) => r.labels.length > 0 ? r : Promise.reject(new Error('empty'))),
-        labelClustersGroq(clusterInputs, seedTopic).then((r) => r.labels.length > 0 ? r : Promise.reject(new Error('empty'))),
-      ])
-    } catch (err) {
+    const labelPromise: Promise<LabelResult> = Promise.any([
+      labelClusters(clusterInputs, seedTopic).then((r) => r.labels.length > 0 ? r : Promise.reject(new Error('empty'))),
+      labelClustersGroq(clusterInputs, seedTopic).then((r) => r.labels.length > 0 ? r : Promise.reject(new Error('empty'))),
+    ]).catch((err): LabelResult => {
       console.warn('[session/create] both labelers failed, using generic labels:', err)
-    }
-    const labels = labelResult.labels
-    if (labels.length > 0) {
-      await Promise.all(labels.map((l) =>
-        db.from('clusters')
-          .update({ label: l.label, description: l.description, field: l.field })
-          .eq('id', `${sessionId}-cluster-${l.clusterIndex}`)
-          .eq('session_id', sessionId)
-      ))
-    }
-
+      return { labels: [], ai_available: false, reason: 'error' }
+    })
 
     const paperRows = papersMapped.map((p, i) => ({
       id: p.id,
@@ -376,10 +376,23 @@ export async function POST(req: NextRequest) {
       weight: e.weight,
       edge_type: e.edgeType,
     }))
-    await Promise.all([
+    // Join: labeling runs in parallel with the paper/edge inserts.
+    const [labelResult] = await Promise.all([
+      labelPromise,
       paperRows.length > 0 ? db.from('papers').insert(paperRows) : Promise.resolve(),
       edgeRows.length > 0 ? db.from('edges').insert(edgeRows) : Promise.resolve(),
     ])
+    const labels = labelResult.labels
+    // Persist AI labels onto the already-inserted cluster rows (needs labelResult; this
+    // ~0.3s update is off the heavy insert path).
+    if (labels.length > 0) {
+      await Promise.all(labels.map((l) =>
+        db.from('clusters')
+          .update({ label: l.label, description: l.description, field: l.field })
+          .eq('id', `${sessionId}-cluster-${l.clusterIndex}`)
+          .eq('session_id', sessionId)
+      ))
+    }
 
     // Build label map for in-response enrichment
     const labelMap = new Map(labels.map((l) => [l.clusterIndex, l]))
