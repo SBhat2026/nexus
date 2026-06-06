@@ -612,10 +612,17 @@ export default function SessionPage({ params }: PageProps) {
     autoCheckpoint('Before AI edit')
     const removedNodes = new Set(result.removedNodeIds)
     const removedEdges = new Set(result.removedEdgeIds)
+    // In-place field changes (rename, reassignment, refreshed counts) keyed by node id.
+    const patches = new Map((result.updatedNodes ?? []).map((u) => [u.id, u.changes]))
     setGraphData((prev) => {
       if (!prev) return prev
       const updated: GraphData = {
-        nodes: [...prev.nodes.filter((n) => !removedNodes.has(n.id)), ...result.addedNodes],
+        nodes: [
+          ...prev.nodes
+            .filter((n) => !removedNodes.has(n.id))
+            .map((n) => (patches.has(n.id) ? ({ ...n, ...patches.get(n.id) } as GraphNode) : n)),
+          ...result.addedNodes,
+        ],
         edges: [
           ...prev.edges.filter((e) => !removedEdges.has(e.id) && !removedNodes.has(e.source) && !removedNodes.has(e.target)),
           ...result.addedEdges,
@@ -624,6 +631,8 @@ export default function SessionPage({ params }: PageProps) {
       try { sessionStorage.setItem(`nexus_graph_${id}`, JSON.stringify(updated)) } catch {}
       return updated
     })
+    // Keep the side panel in sync if the selected node was renamed/reassigned.
+    setSelectedNode((prev) => (prev && patches.has(prev.id) ? ({ ...prev, ...patches.get(prev.id) } as typeof prev) : prev))
     void touchSession('Applied AI edits')
   }
 

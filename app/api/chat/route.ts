@@ -15,6 +15,8 @@ const GraphActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('remove_node'), targetId: z.string(), confidence: z.number().min(0).max(1), reason: z.string() }),
   z.object({ type: z.literal('add_edge'), sourceId: z.string(), targetId: z.string(), edgeType: z.enum(['citation', 'semantic_similarity', 'generated_from']).optional(), confidence: z.number().min(0).max(1), reason: z.string() }),
   z.object({ type: z.literal('remove_edge'), edgeId: z.string(), confidence: z.number().min(0).max(1), reason: z.string() }),
+  z.object({ type: z.literal('rename_cluster'), targetId: z.string(), newLabel: z.string(), confidence: z.number().min(0).max(1), reason: z.string() }),
+  z.object({ type: z.literal('assign_paper'), paperId: z.string(), clusterId: z.string().nullable(), confidence: z.number().min(0).max(1), reason: z.string() }),
 ])
 
 const ResponseSchema = z.object({
@@ -44,6 +46,7 @@ export async function POST(req: NextRequest) {
     const {
       seedTopic = '',
       clusters = [],
+      papers = [],
       selectedNode = null,
       prunedClusters = [],
       directions = [],
@@ -58,6 +61,16 @@ export async function POST(req: NextRequest) {
     const clusterRefList = clusterArr.length
       ? clusterArr.map(c => `${c.id} = ${c.label}`).join('\n')
       : 'No clusters loaded'
+
+    // id → title (with current cluster) so the model can target papers by name
+    // in rename/assign/remove edits. Capped to keep the prompt bounded.
+    const clusterLabelById = new Map(clusterArr.map(c => [c.id, c.label]))
+    const paperArr = (papers as { id: string; title: string; clusterId: string | null }[]).slice(0, 120)
+    const paperRefList = paperArr.length
+      ? paperArr
+          .map(p => `${p.id} = ${(p.title ?? '').slice(0, 90)}${p.clusterId ? ` [in: ${clusterLabelById.get(p.clusterId) ?? 'unknown'}]` : ' [unclustered]'}`)
+          .join('\n')
+      : 'No papers loaded'
 
     const prunedList = (prunedClusters as { label: string; reason: string }[]).length > 0
       ? prunedClusters.map((p: { label: string; reason: string }) => `• ${p.label} — "${p.reason}"`).join('\n')
@@ -155,21 +168,26 @@ Optionally, if the researcher would benefit from a refined search query, include
 
 Only suggest a reframe when the current map seems too broad, too narrow, or misaligned with the question. Never include an action unless it genuinely helps.
 
-GRAPH EDITING — only when the researcher explicitly asks you to change the map (e.g. "add a cluster for X", "add a paper on Y", "connect A and B", "remove the Y cluster", "remove this paper", "drop the link between A and B"). You may create or remove both clusters AND papers. Propose up to 3 reviewable edits via "graphActions". The user always previews and approves before anything is applied. Never edit unprompted.
+GRAPH EDITING — only when the researcher explicitly asks you to change the map (e.g. "add a cluster for X", "rename cluster A to B", "move paper P into cluster C", "remove papers A, B, C from this cluster", "add a paper on Y", "connect A and B", "remove the Y cluster", "drop the link between A and B"). You may add/remove clusters and papers, RENAME clusters, and MOVE papers between clusters. Propose up to 8 reviewable edits via "graphActions" — a single instruction may map to several edits (e.g. rename one cluster + move three papers + add one paper = 5 edits). The user always previews and approves before anything is applied. Never edit unprompted.
 
 Existing cluster ids you may target (use the exact id):
 ${clusterRefList}
 
-For removing a paper, target the currently selected node's id (shown above as "Selected node id") — you only have an id when a paper is selected. When adding a paper you may optionally set "clusterId" to attach it to one of the clusters above.
+Papers in this session (id = title [current cluster]). Match the researcher's wording to a title and use its exact id:
+${paperRefList}
+
+Resolve papers by matching the researcher's description to a title in the list above and using that exact id. If a paper is selected, its id is also shown above as "Selected node id". To DETACH a paper from its cluster (remove it from a cluster without deleting it), use assign_paper with "clusterId": null. Use remove_node ONLY to delete a paper/cluster entirely.
 
 Edit shapes (each needs "confidence" 0–1 and a short "reason"):
 {"type":"add_node","nodeType":"cluster","label":"...","description":"...","confidence":0.0,"reason":"..."}
 {"type":"add_node","nodeType":"paper","label":"<paper title>","description":"<abstract/summary>","clusterId":"<optional cluster id>","confidence":0.0,"reason":"..."}
 {"type":"remove_node","targetId":"<existing id>","confidence":0.0,"reason":"..."}
+{"type":"rename_cluster","targetId":"<existing cluster id>","newLabel":"<new name>","confidence":0.0,"reason":"..."}
+{"type":"assign_paper","paperId":"<existing paper id>","clusterId":"<cluster id or null>","confidence":0.0,"reason":"..."}
 {"type":"add_edge","sourceId":"<id>","targetId":"<id>","edgeType":"semantic_similarity","confidence":0.0,"reason":"..."}
 {"type":"remove_edge","edgeId":"<edge id>","confidence":0.0,"reason":"..."}
 
-Use real ids from the lists above for removals and edges. Be conservative with confidence — below 0.5 means speculative. Full response shape:
+Use real ids from the lists above for renames, moves, removals, and edges — never invent ids. Be conservative with confidence — below 0.5 means speculative. Full response shape:
 {"text":"...","action":null,"graphActions":[ ... ]}`
 
     const userAnthropicKey = req.headers.get('x-anthropic-key') || null
@@ -186,8 +204,8 @@ Use real ids from the lists above for removals and edges. Be conservative with c
           return {
             text: parsed.data.text,
             action: parsed.data.action ?? null,
-            // Hard cap: never surface more than 3 edits at once.
-            graphActions: (parsed.data.graphActions ?? []).slice(0, 3),
+            // Hard cap: never surface more than 8 edits at once (one batch).
+            graphActions: (parsed.data.graphActions ?? []).slice(0, 8),
           }
         }
         return { text: raw, action: null, graphActions: [] }

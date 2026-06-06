@@ -3,10 +3,13 @@ import { randomUUID } from 'crypto'
 import { createServerClient } from '@/lib/supabase/server'
 import type { GraphEditAction, GraphEditResult, GraphNode, GraphEdge, ClusterNode, PaperNode } from '@/lib/types'
 
-const MAX_ACTIONS = 3
+// Raised 3 → 8 so a single instruction ("rename X, drop A/B/C, add Z") applies
+// as one reviewed batch instead of being truncated.
+const MAX_ACTIONS = 8
 // Raised from 50 → 200 to match the client. 50 was too low for real research
 // sessions; the D3 force sim handles 200 nodes comfortably.
 const MAX_NODES = 200
+const MAX_LABEL = 60
 
 /**
  * POST /api/session/[id]/graph-edit
@@ -30,8 +33,8 @@ export async function POST(
 
     // Load existing ids for validation, node typing, and the node-count limit.
     const [clustersRes, papersRes, directionsRes] = await Promise.all([
-      db.from('clusters').select('id, label').eq('session_id', sessionId),
-      db.from('papers').select('id, is_outlier').eq('session_id', sessionId),
+      db.from('clusters').select('id, label, paper_count').eq('session_id', sessionId),
+      db.from('papers').select('id, is_outlier, cluster_id').eq('session_id', sessionId),
       db.from('direction_nodes').select('id').eq('session_id', sessionId),
     ])
     const clusterIds = new Set((clustersRes.data ?? []).map((c) => c.id))
@@ -39,6 +42,20 @@ export async function POST(
     const outlierIds = new Set((papersRes.data ?? []).filter((p) => p.is_outlier).map((p) => p.id))
     const directionIds = new Set((directionsRes.data ?? []).map((d) => d.id))
     const labels = new Set((clustersRes.data ?? []).map((c) => (c.label ?? '').trim().toLowerCase()))
+
+    // Where each paper currently lives + each cluster's stored count, so paper
+    // moves/adds/removes keep the denormalized paper_count accurate.
+    const paperCluster = new Map<string, string | null>(
+      (papersRes.data ?? []).map((p) => [p.id, p.cluster_id ?? null]),
+    )
+    const clusterCount = new Map<string, number>(
+      (clustersRes.data ?? []).map((c) => [c.id, c.paper_count ?? 0]),
+    )
+    // Net change to each cluster's paper_count over this batch.
+    const countDelta = new Map<string, number>()
+    const bumpCount = (cid: string | null, by: number) => {
+      if (cid && clusterIds.has(cid)) countDelta.set(cid, (countDelta.get(cid) ?? 0) + by)
+    }
 
     let nodeCount = clusterIds.size + paperIds.size + directionIds.size
 
@@ -49,7 +66,7 @@ export async function POST(
         : directionIds.has(nid) ? 'direction'
         : null
 
-    const result: GraphEditResult = { addedNodes: [], addedEdges: [], removedNodeIds: [], removedEdgeIds: [], skipped: [] }
+    const result: GraphEditResult = { addedNodes: [], addedEdges: [], removedNodeIds: [], removedEdgeIds: [], updatedNodes: [], skipped: [] }
     const audit: { session_id: string; action_type: string; target_id: string; target_type: string; note: string; metadata: unknown }[] = []
 
     for (const a of actions) {
@@ -71,6 +88,8 @@ export async function POST(
           if (error) { result.skipped.push({ action: a, reason: error.message }); continue }
 
           paperIds.add(newId)
+          paperCluster.set(newId, clusterId)
+          bumpCount(clusterId, +1)
           nodeCount++
           const node: PaperNode = {
             id: newId, nodeType: 'paper', s2PaperId: `ai:${newId}`, title: label,
@@ -119,7 +138,11 @@ export async function POST(
         if (error) { result.skipped.push({ action: a, reason: error.message }); continue }
 
         if (t === 'cluster') clusterIds.delete(a.targetId)
-        else if (t === 'paper' || t === 'outlier') { paperIds.delete(a.targetId); outlierIds.delete(a.targetId) }
+        else if (t === 'paper' || t === 'outlier') {
+          bumpCount(paperCluster.get(a.targetId) ?? null, -1)
+          paperCluster.delete(a.targetId)
+          paperIds.delete(a.targetId); outlierIds.delete(a.targetId)
+        }
         else directionIds.delete(a.targetId)
         nodeCount--
         result.removedNodeIds.push(a.targetId)
@@ -149,6 +172,43 @@ export async function POST(
         result.removedEdgeIds.push(a.edgeId)
         audit.push({ session_id: sessionId, action_type: 'generate', target_id: a.edgeId, target_type: 'edge', note: a.reason, metadata: { ai_edit: 'remove_edge', confidence: a.confidence } })
       }
+
+      else if (a.type === 'rename_cluster') {
+        if (!clusterIds.has(a.targetId)) { result.skipped.push({ action: a, reason: 'Cluster not found' }); continue }
+        const newLabel = (a.newLabel ?? '').trim().slice(0, MAX_LABEL)
+        if (!newLabel) { result.skipped.push({ action: a, reason: 'Empty label' }); continue }
+        if (labels.has(newLabel.toLowerCase())) { result.skipped.push({ action: a, reason: 'Duplicate label' }); continue }
+        // custom_label takes precedence over the AI label everywhere it's rendered.
+        const { error } = await db.from('clusters').update({ custom_label: newLabel }).eq('id', a.targetId).eq('session_id', sessionId)
+        if (error) { result.skipped.push({ action: a, reason: error.message }); continue }
+        labels.add(newLabel.toLowerCase())
+        result.updatedNodes.push({ id: a.targetId, changes: { label: newLabel } })
+        audit.push({ session_id: sessionId, action_type: 'generate', target_id: a.targetId, target_type: 'cluster', note: a.reason, metadata: { ai_edit: 'rename_cluster', label: newLabel, confidence: a.confidence } })
+      }
+
+      else if (a.type === 'assign_paper') {
+        const t = typeOf(a.paperId)
+        if (t !== 'paper' && t !== 'outlier') { result.skipped.push({ action: a, reason: 'Paper not found' }); continue }
+        const dest = a.clusterId && clusterIds.has(a.clusterId) ? a.clusterId : null
+        if (a.clusterId && !dest) { result.skipped.push({ action: a, reason: 'Target cluster not found' }); continue }
+        const from = paperCluster.get(a.paperId) ?? null
+        if (from === dest) { result.skipped.push({ action: a, reason: 'Already in that cluster' }); continue }
+        const { error } = await db.from('papers').update({ cluster_id: dest }).eq('id', a.paperId).eq('session_id', sessionId)
+        if (error) { result.skipped.push({ action: a, reason: error.message }); continue }
+        bumpCount(from, -1)
+        bumpCount(dest, +1)
+        paperCluster.set(a.paperId, dest)
+        result.updatedNodes.push({ id: a.paperId, changes: { clusterId: dest } })
+        audit.push({ session_id: sessionId, action_type: 'generate', target_id: a.paperId, target_type: t, note: a.reason, metadata: { ai_edit: 'assign_paper', from, to: dest, confidence: a.confidence } })
+      }
+    }
+
+    // Flush accumulated paper_count changes; reflect the new totals on cluster nodes.
+    for (const [cid, delta] of countDelta) {
+      if (delta === 0) continue
+      const next = Math.max(0, (clusterCount.get(cid) ?? 0) + delta)
+      const { error } = await db.from('clusters').update({ paper_count: next }).eq('id', cid).eq('session_id', sessionId)
+      if (!error) result.updatedNodes.push({ id: cid, changes: { paperCount: next } })
     }
 
     if (audit.length) { await db.from('human_actions').insert(audit) }

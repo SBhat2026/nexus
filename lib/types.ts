@@ -98,6 +98,16 @@ export type GraphEditAction =
   | { type: 'remove_node'; targetId: string; confidence: number; reason: string }
   | { type: 'add_edge'; sourceId: string; targetId: string; edgeType?: EdgeType; confidence: number; reason: string }
   | { type: 'remove_edge'; edgeId: string; confidence: number; reason: string }
+  // Rename a cluster (writes clusters.custom_label; precedence over the AI label).
+  | { type: 'rename_cluster'; targetId: string; newLabel: string; confidence: number; reason: string }
+  // Move a paper into another cluster, or detach it (clusterId = null).
+  | { type: 'assign_paper'; paperId: string; clusterId: string | null; confidence: number; reason: string }
+
+// In-place field changes applied to existing nodes (rename, reassignment, count refresh).
+export interface GraphNodePatch {
+  id: string
+  changes: Record<string, unknown>
+}
 
 // Result of applying a batch of edits, returned by /api/session/[id]/graph-edit.
 export interface GraphEditResult {
@@ -105,6 +115,8 @@ export interface GraphEditResult {
   addedEdges: GraphEdge[]
   removedNodeIds: string[]
   removedEdgeIds: string[]
+  // Existing nodes whose fields changed (label, clusterId, paperCount, …).
+  updatedNodes: GraphNodePatch[]
   skipped: { action: GraphEditAction; reason: string }[]
 }
 

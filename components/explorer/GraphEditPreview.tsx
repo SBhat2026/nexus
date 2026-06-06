@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Plus, Minus, Link2, Unlink, FlaskConical, Loader2, Check } from 'lucide-react'
+import { X, Plus, Minus, Link2, Unlink, FlaskConical, Loader2, Check, Pencil, FolderInput } from 'lucide-react'
 import type { GraphEditAction, GraphNode } from '@/lib/types'
 
 interface Props {
@@ -35,6 +35,15 @@ function describe(a: GraphEditAction, nodes: GraphNode[]): { icon: React.ReactNo
       return { icon: <Link2 className="w-3.5 h-3.5 text-blue-600" />, title: `Link “${nodeLabel(nodes, a.sourceId)}” ↔ “${nodeLabel(nodes, a.targetId)}”` }
     case 'remove_edge':
       return { icon: <Unlink className="w-3.5 h-3.5 text-amber-600" />, title: `Remove a link` }
+    case 'rename_cluster':
+      return { icon: <Pencil className="w-3.5 h-3.5 text-violet-600" />, title: `Rename “${nodeLabel(nodes, a.targetId)}” → “${a.newLabel}”` }
+    case 'assign_paper':
+      return {
+        icon: <FolderInput className="w-3.5 h-3.5 text-sky-600" />,
+        title: a.clusterId
+          ? `Move “${nodeLabel(nodes, a.paperId)}” → “${nodeLabel(nodes, a.clusterId)}”`
+          : `Detach “${nodeLabel(nodes, a.paperId)}” from its cluster`,
+      }
   }
 }
 

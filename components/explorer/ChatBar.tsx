@@ -11,6 +11,8 @@ import GraphEditPreview from './GraphEditPreview'
 // smooth well past 200 nodes here (only collision + a few edge forces run), so the
 // higher ceiling is safe; revisit if sessions routinely exceed several hundred nodes.
 const MAX_NODES = 200
+// Mirror of the server cap on edits surfaced/applied per chat turn.
+const MAX_EDITS = 8
 
 interface Message {
   role: 'user' | 'assistant'
@@ -117,6 +119,18 @@ export default function ChatBar({
       .filter((n): n is ClusterNode => n.nodeType === 'cluster')
       .map(c => ({ id: c.id, label: c.label, description: c.description, paperCount: c.paperCount }))
 
+    // Paper/outlier id→title→cluster so the model can target papers by name in edits.
+    const papers = graphNodes
+      .filter((n): n is import('@/lib/types').PaperNode | import('@/lib/types').OutlierNode =>
+        n.nodeType === 'paper' || n.nodeType === 'outlier')
+      .map(p => ({
+        id: p.id,
+        title: p.title,
+        clusterId: p.nodeType === 'paper'
+          ? (p as import('@/lib/types').PaperNode).clusterId ?? null
+          : (p as import('@/lib/types').OutlierNode).nearestClusterId ?? null,
+      }))
+
     const directions = graphNodes
       .filter((n): n is DirectionNode => n.nodeType === 'direction')
       .map(d => ({ title: d.title, description: d.description }))
@@ -159,6 +173,7 @@ export default function ChatBar({
           context: {
             seedTopic,
             clusters,
+            papers,
             selectedNode: nodeContextFor(selectedNode) ?? {
               nodeType: 'session',
               seedTopic,
@@ -176,7 +191,7 @@ export default function ChatBar({
       const data = await res.json()
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content: data.text ?? 'No response.', action: data.action ?? null, graphActions: (data.graphActions ?? []).slice(0, 3) },
+        { role: 'assistant', content: data.text ?? 'No response.', action: data.action ?? null, graphActions: (data.graphActions ?? []).slice(0, MAX_EDITS) },
       ])
     } catch {
       setMessages(prev => [
@@ -190,8 +205,8 @@ export default function ChatBar({
 
   async function applyEdits(msgIdx: number, selected: GraphEditAction[]) {
     if (applying) return
-    // Client guards mirror the server: at most 3 edits, respect the 50-node ceiling.
-    let actions = selected.slice(0, 3)
+    // Client guards mirror the server: cap the batch, respect the node ceiling.
+    let actions = selected.slice(0, MAX_EDITS)
     const currentNodes = graphNodes.length
     let addsAllowed = Math.max(0, MAX_NODES - currentNodes)
     actions = actions.filter((a) => {
@@ -220,7 +235,7 @@ export default function ChatBar({
       const result = res.status === 200 ? (await res.json()) as GraphEditResult : null
       if (result) {
         onGraphEdit?.(result)
-        const applied = result.addedNodes.length + result.addedEdges.length + result.removedNodeIds.length + result.removedEdgeIds.length
+        const applied = result.addedNodes.length + result.addedEdges.length + result.removedNodeIds.length + result.removedEdgeIds.length + (result.updatedNodes?.length ?? 0)
         const parts: string[] = []
         if (applied > 0) parts.push(`Applied ${applied} change${applied === 1 ? '' : 's'}.`)
         if (result.skipped.length) parts.push(`Skipped ${result.skipped.length} (${result.skipped.map(s => s.reason).join('; ')}).`)
