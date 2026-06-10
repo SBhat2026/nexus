@@ -17,6 +17,9 @@ const GraphActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('remove_edge'), edgeId: z.string(), confidence: z.number().min(0).max(1), reason: z.string() }),
   z.object({ type: z.literal('rename_cluster'), targetId: z.string(), newLabel: z.string(), confidence: z.number().min(0).max(1), reason: z.string() }),
   z.object({ type: z.literal('assign_paper'), paperId: z.string(), clusterId: z.string().nullable(), confidence: z.number().min(0).max(1), reason: z.string() }),
+  z.object({ type: z.literal('merge_clusters'), sourceId: z.string(), targetId: z.string(), confidence: z.number().min(0).max(1), reason: z.string() }),
+  z.object({ type: z.literal('prune_cluster'), targetId: z.string(), reason: z.string(), confidence: z.number().min(0).max(1) }),
+  z.object({ type: z.literal('unprune_cluster'), targetId: z.string(), confidence: z.number().min(0).max(1), reason: z.string() }),
 ])
 
 const ResponseSchema = z.object({
@@ -168,7 +171,7 @@ Optionally, if the researcher would benefit from a refined search query, include
 
 Only suggest a reframe when the current map seems too broad, too narrow, or misaligned with the question. Never include an action unless it genuinely helps.
 
-GRAPH EDITING — only when the researcher explicitly asks you to change the map (e.g. "add a cluster for X", "rename cluster A to B", "move paper P into cluster C", "remove papers A, B, C from this cluster", "add a paper on Y", "connect A and B", "remove the Y cluster", "drop the link between A and B"). You may add/remove clusters and papers, RENAME clusters, and MOVE papers between clusters. Propose up to 8 reviewable edits via "graphActions" — a single instruction may map to several edits (e.g. rename one cluster + move three papers + add one paper = 5 edits). The user always previews and approves before anything is applied. Never edit unprompted.
+GRAPH EDITING — only when the researcher explicitly asks you to change the map (e.g. "add a cluster for X", "rename cluster A to B", "move paper P into cluster C", "remove papers A, B, C from this cluster", "merge cluster A into B", "exclude/prune the Y cluster", "bring back cluster Z", "add a paper on Y", "connect A and B", "remove the Y cluster", "drop the link between A and B"). You may add/remove clusters and papers, RENAME clusters, MOVE papers between clusters, MERGE two clusters, and PRUNE/UNPRUNE clusters. Propose up to 8 reviewable edits via "graphActions" — a single instruction may map to several edits (e.g. rename one cluster + move three papers + add one paper = 5 edits). The user always previews and approves before anything is applied. Never edit unprompted. NOTE: cluster colors are changed by the user directly in the side panel — there is no color action; if asked to recolor, tell them to pick a color from the cluster panel.
 
 Existing cluster ids you may target (use the exact id):
 ${clusterRefList}
@@ -184,6 +187,9 @@ Edit shapes (each needs "confidence" 0–1 and a short "reason"):
 {"type":"remove_node","targetId":"<existing id>","confidence":0.0,"reason":"..."}
 {"type":"rename_cluster","targetId":"<existing cluster id>","newLabel":"<new name>","confidence":0.0,"reason":"..."}
 {"type":"assign_paper","paperId":"<existing paper id>","clusterId":"<cluster id or null>","confidence":0.0,"reason":"..."}
+{"type":"merge_clusters","sourceId":"<cluster folded in & deleted>","targetId":"<cluster kept>","confidence":0.0,"reason":"..."}
+{"type":"prune_cluster","targetId":"<existing cluster id>","reason":"<why excluded>","confidence":0.0}
+{"type":"unprune_cluster","targetId":"<existing cluster id>","confidence":0.0,"reason":"..."}
 {"type":"add_edge","sourceId":"<id>","targetId":"<id>","edgeType":"semantic_similarity","confidence":0.0,"reason":"..."}
 {"type":"remove_edge","edgeId":"<edge id>","confidence":0.0,"reason":"..."}
 

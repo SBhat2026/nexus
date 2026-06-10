@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Plus, Minus, Link2, Unlink, FlaskConical, Loader2, Check, Pencil, FolderInput } from 'lucide-react'
+import { X, Plus, Minus, Link2, Unlink, FlaskConical, Loader2, Check, Pencil, FolderInput, Combine, EyeOff, Eye } from 'lucide-react'
 import type { GraphEditAction, GraphNode } from '@/lib/types'
 
 interface Props {
@@ -44,6 +44,12 @@ function describe(a: GraphEditAction, nodes: GraphNode[]): { icon: React.ReactNo
           ? `Move “${nodeLabel(nodes, a.paperId)}” → “${nodeLabel(nodes, a.clusterId)}”`
           : `Detach “${nodeLabel(nodes, a.paperId)}” from its cluster`,
       }
+    case 'merge_clusters':
+      return { icon: <Combine className="w-3.5 h-3.5 text-indigo-600" />, title: `Merge “${nodeLabel(nodes, a.sourceId)}” into “${nodeLabel(nodes, a.targetId)}”` }
+    case 'prune_cluster':
+      return { icon: <EyeOff className="w-3.5 h-3.5 text-rose-600" />, title: `Exclude “${nodeLabel(nodes, a.targetId)}”` }
+    case 'unprune_cluster':
+      return { icon: <Eye className="w-3.5 h-3.5 text-emerald-600" />, title: `Restore “${nodeLabel(nodes, a.targetId)}”` }
   }
 }
 

@@ -25,7 +25,11 @@ interface Props {
   onDrillCluster?: (clusterId: string) => void
   drilling?: boolean
   onRenameCluster?: (clusterId: string, label: string) => void
+  onRecolorCluster?: (clusterId: string, color: string | null) => void
 }
+
+// User-selectable cluster colors. null = reset to the default blue.
+const CLUSTER_COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#ef4444', '#f59e0b', '#10b981', '#14b8a6', '#64748b']
 
 
 function ScorePill({ label, value, color }: { label: string; value: number; color: string }) {
@@ -157,6 +161,7 @@ function ClusterDetail({
   onDrillCluster,
   drilling = false,
   onRenameCluster,
+  onRecolorCluster,
 }: {
   node: ClusterNode
   onPrune: (id: string, reason: string) => void
@@ -171,6 +176,7 @@ function ClusterDetail({
   onDrillCluster?: (clusterId: string) => void
   drilling?: boolean
   onRenameCluster?: (clusterId: string, label: string) => void
+  onRecolorCluster?: (clusterId: string, color: string | null) => void
 }) {
   const [pruneReason, setPruneReason] = useState('')
   const [showPruneInput, setShowPruneInput] = useState(false)
@@ -292,6 +298,27 @@ function ClusterDetail({
         )}
       </div>
       <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{node.description}</p>
+
+      {/* Cluster color */}
+      {onRecolorCluster && (
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Color</span>
+          <div className="flex items-center gap-1.5">
+            {CLUSTER_COLORS.map((c) => {
+              const active = (node.color ?? '#3b82f6') === c
+              return (
+                <button
+                  key={c}
+                  onClick={() => onRecolorCluster(node.id, c === '#3b82f6' ? null : c)}
+                  title={c === '#3b82f6' ? 'Default' : c}
+                  className={`w-4 h-4 rounded-full border transition ${active ? 'ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-900 ring-slate-400' : 'border-black/10 dark:border-white/20 hover:scale-110'}`}
+                  style={{ backgroundColor: c }}
+                />
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Focus mode toggle */}
       <button
@@ -594,7 +621,7 @@ function OutlierDetail({
   )
 }
 
-export default function RightSidebar({ node, onClose, onPrune, onUnprune, onFlag, onDirectionsGenerated, onAiUnavailable, sessionId, prunedClusters = [], aiAvailable = true, allNodes, onFindSimilar, findingSimilar = false, isLoggedIn = false, onDrillCluster, drilling = false, onRenameCluster }: Props) {
+export default function RightSidebar({ node, onClose, onPrune, onUnprune, onFlag, onDirectionsGenerated, onAiUnavailable, sessionId, prunedClusters = [], aiAvailable = true, allNodes, onFindSimilar, findingSimilar = false, isLoggedIn = false, onDrillCluster, drilling = false, onRenameCluster, onRecolorCluster }: Props) {
   const [hasByokKey, setHasByokKey] = useState(false)
 
   useEffect(() => {
@@ -627,7 +654,7 @@ export default function RightSidebar({ node, onClose, onPrune, onUnprune, onFlag
           </div>
           <div className="p-4 flex-1">
             {node.nodeType === 'paper' && <PaperDetail node={node as PaperNode} onFindSimilar={onFindSimilar} findingSimilar={findingSimilar} />}
-            {node.nodeType === 'cluster' && <ClusterDetail node={node as ClusterNode} onPrune={onPrune} onUnprune={onUnprune} onDirectionsGenerated={onDirectionsGenerated} onAiUnavailable={onAiUnavailable} sessionId={sessionId} prunedClusters={prunedClusters} aiAvailable={aiAvailable} hasByokKey={hasByokKey} allNodes={allNodes} onDrillCluster={onDrillCluster} drilling={drilling} onRenameCluster={onRenameCluster} />}
+            {node.nodeType === 'cluster' && <ClusterDetail node={node as ClusterNode} onPrune={onPrune} onUnprune={onUnprune} onDirectionsGenerated={onDirectionsGenerated} onAiUnavailable={onAiUnavailable} sessionId={sessionId} prunedClusters={prunedClusters} aiAvailable={aiAvailable} hasByokKey={hasByokKey} allNodes={allNodes} onDrillCluster={onDrillCluster} drilling={drilling} onRenameCluster={onRenameCluster} onRecolorCluster={onRecolorCluster} />}
             {node.nodeType === 'direction' && <DirectionDetail node={node as DirectionNode} onFlag={onFlag} />}
             {node.nodeType === 'outlier' && <OutlierDetail node={node as OutlierNode} onFlag={onFlag} onDirectionsGenerated={onDirectionsGenerated} onAiUnavailable={onAiUnavailable} sessionId={sessionId} aiAvailable={aiAvailable} hasByokKey={hasByokKey} allNodes={allNodes} />}
             {sessionId && (

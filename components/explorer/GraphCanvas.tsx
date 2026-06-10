@@ -327,7 +327,7 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas(
 
       if (d.nodeType === 'cluster') {
         const c = d as ClusterNode
-        const color = '#3b82f6'
+        const color = c.color ?? '#3b82f6'
         const quality = c.clusterQuality ?? 0.5
         const isExpanded = expandedClusters.has(c.id)
         const currentYear = new Date().getFullYear()

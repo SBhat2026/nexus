@@ -61,6 +61,7 @@ export async function GET(
         umapY: c.umap_y ?? undefined,
         medianYear: c.median_year ?? undefined,
         drilldownCount: drilldownCounts.get(c.id) ?? 0,
+        color: c.custom_color ?? undefined,
       }
       nodes.push(clusterNode)
     })

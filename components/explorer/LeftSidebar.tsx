@@ -24,6 +24,9 @@ interface Props {
   onRerunDomain?: (forcedDomain: string) => void | Promise<void>
   onUnpruneCluster?: (clusterId: string) => void
   width?: number
+  /** Phone layout: hide desktop-only actions (Export) and show a close button. */
+  mobile?: boolean
+  onClose?: () => void
 }
 
 export default function LeftSidebar({
@@ -44,6 +47,8 @@ export default function LeftSidebar({
   onRerunDomain,
   onUnpruneCluster,
   width,
+  mobile = false,
+  onClose,
 }: Props) {
   const {
     sessionName, setSessionName, seedTopic, isDark, toggleTheme,
@@ -218,6 +223,15 @@ export default function LeftSidebar({
         >
           {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
         </button>
+        {mobile && onClose && (
+          <button
+            onClick={onClose}
+            className="shrink-0 p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+            title="Close menu"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Focused cluster indicator */}
@@ -754,12 +768,15 @@ export default function LeftSidebar({
             ? 'Expands the selected paper — fetches its related work and clusters it into a new branch.'
             : 'Select a paper or outlier to expand its related work into new clusters.'}
         </p>
-        <button
-          onClick={onExport}
-          className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium transition"
-        >
-          <Download className="w-3.5 h-3.5" /> Export JSON
-        </button>
+        {/* Export is a desktop-only feature (file download is awkward on phones). */}
+        {!mobile && (
+          <button
+            onClick={onExport}
+            className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium transition"
+          >
+            <Download className="w-3.5 h-3.5" /> Export JSON
+          </button>
+        )}
         <button
           onClick={onSave}
           disabled={isSaved || saving}

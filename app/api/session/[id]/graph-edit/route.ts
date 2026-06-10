@@ -201,6 +201,58 @@ export async function POST(
         result.updatedNodes.push({ id: a.paperId, changes: { clusterId: dest } })
         audit.push({ session_id: sessionId, action_type: 'generate', target_id: a.paperId, target_type: t, note: a.reason, metadata: { ai_edit: 'assign_paper', from, to: dest, confidence: a.confidence } })
       }
+
+      else if (a.type === 'merge_clusters') {
+        if (!clusterIds.has(a.sourceId)) { result.skipped.push({ action: a, reason: 'Source cluster not found' }); continue }
+        if (!clusterIds.has(a.targetId)) { result.skipped.push({ action: a, reason: 'Target cluster not found' }); continue }
+        if (a.sourceId === a.targetId) { result.skipped.push({ action: a, reason: 'Cannot merge a cluster into itself' }); continue }
+
+        // Repoint every paper currently in the source into the target.
+        const moving = [...paperCluster.entries()].filter(([, cid]) => cid === a.sourceId).map(([pid]) => pid)
+        if (moving.length) {
+          const { error } = await db.from('papers').update({ cluster_id: a.targetId }).eq('cluster_id', a.sourceId).eq('session_id', sessionId)
+          if (error) { result.skipped.push({ action: a, reason: error.message }); continue }
+          for (const pid of moving) {
+            paperCluster.set(pid, a.targetId)
+            result.updatedNodes.push({ id: pid, changes: { clusterId: a.targetId } })
+          }
+          bumpCount(a.targetId, moving.length)
+        }
+
+        // Drop the source cluster's edges (paper-level edges are untouched), then the cluster.
+        const { data: connEdges } = await db.from('edges').select('id')
+          .eq('session_id', sessionId)
+          .or(`source_id.eq.${a.sourceId},target_id.eq.${a.sourceId}`)
+        await db.from('edges').delete().eq('session_id', sessionId).or(`source_id.eq.${a.sourceId},target_id.eq.${a.sourceId}`)
+        for (const e of connEdges ?? []) result.removedEdgeIds.push(e.id)
+
+        const { error: delErr } = await db.from('clusters').delete().eq('id', a.sourceId).eq('session_id', sessionId)
+        if (delErr) { result.skipped.push({ action: a, reason: delErr.message }); continue }
+
+        clusterIds.delete(a.sourceId)
+        countDelta.delete(a.sourceId)
+        nodeCount--
+        result.removedNodeIds.push(a.sourceId)
+        audit.push({ session_id: sessionId, action_type: 'generate', target_id: a.sourceId, target_type: 'cluster', note: a.reason, metadata: { ai_edit: 'merge_clusters', into: a.targetId, moved: moving.length, confidence: a.confidence } })
+      }
+
+      else if (a.type === 'prune_cluster' || a.type === 'unprune_cluster') {
+        if (!clusterIds.has(a.targetId)) { result.skipped.push({ action: a, reason: 'Cluster not found' }); continue }
+        // Curation lives in human_actions as 'prune' rows (replayed by graph GET).
+        // Delete-then-insert keeps it idempotent without a unique constraint.
+        await db.from('human_actions').delete()
+          .eq('session_id', sessionId).eq('action_type', 'prune').eq('target_id', a.targetId)
+        if (a.type === 'prune_cluster') {
+          const reason = (a.reason ?? '').trim() || 'Excluded via assistant'
+          const { error } = await db.from('human_actions').insert({
+            session_id: sessionId, action_type: 'prune', target_id: a.targetId, target_type: 'cluster', note: reason,
+          })
+          if (error) { result.skipped.push({ action: a, reason: error.message }); continue }
+          result.updatedNodes.push({ id: a.targetId, changes: { isPruned: true, pruneReason: reason } })
+        } else {
+          result.updatedNodes.push({ id: a.targetId, changes: { isPruned: false, pruneReason: undefined } })
+        }
+      }
     }
 
     // Flush accumulated paper_count changes; reflect the new totals on cluster nodes.

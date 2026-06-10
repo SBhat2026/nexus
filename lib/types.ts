@@ -42,6 +42,7 @@ export interface ClusterNode extends BaseNode {
   generation?: number  // 1 = initial; 2+ = Go Deeper rounds
   medianYear?: number | null
   drilldownCount?: number  // number of child sessions drilled from this cluster
+  color?: string  // user-chosen hex override; falls back to default cluster blue
 }
 
 export interface DirectionNode extends BaseNode {
@@ -102,6 +103,11 @@ export type GraphEditAction =
   | { type: 'rename_cluster'; targetId: string; newLabel: string; confidence: number; reason: string }
   // Move a paper into another cluster, or detach it (clusterId = null).
   | { type: 'assign_paper'; paperId: string; clusterId: string | null; confidence: number; reason: string }
+  // Fold sourceId's papers into targetId, then delete the (now empty) source cluster.
+  | { type: 'merge_clusters'; sourceId: string; targetId: string; confidence: number; reason: string }
+  // Exclude / re-include a cluster from the active map (curation, replayed on reload).
+  | { type: 'prune_cluster'; targetId: string; reason: string; confidence: number }
+  | { type: 'unprune_cluster'; targetId: string; confidence: number; reason: string }
 
 // In-place field changes applied to existing nodes (rename, reassignment, count refresh).
 export interface GraphNodePatch {

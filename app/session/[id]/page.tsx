@@ -19,7 +19,8 @@ import HistoryPanel from '@/components/explorer/HistoryPanel'
 import SessionProgress from '@/components/landing/SessionProgress'
 import Breadcrumb from '@/components/explorer/Breadcrumb'
 import { useRouter } from 'next/navigation'
-import { Undo2, Redo2, History as HistoryIcon } from 'lucide-react'
+import { Undo2, Redo2, History as HistoryIcon, Menu } from 'lucide-react'
+import { useIsMobile } from '@/hooks/useIsMobile'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -52,6 +53,8 @@ export default function SessionPage({ params }: PageProps) {
 
   const [leftWidth, setLeftWidth] = useState(260)
   const [rightWidth, setRightWidth] = useState(340)
+  const isMobile = useIsMobile()
+  const [leftOpen, setLeftOpen] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -312,6 +315,7 @@ export default function SessionPage({ params }: PageProps) {
     if (!nodeId) { setSelectedNode(null); return }
     const node = graphData?.nodes.find((n) => n.id === nodeId) ?? null
     setSelectedNode(node)
+    setLeftOpen(false) // phone: a node detail and the controls drawer are never open together
   }
 
   // Write a curation action through to the DB (source of truth). Optimistic UI is
@@ -648,6 +652,18 @@ export default function SessionPage({ params }: PageProps) {
     }).then(() => void touchSession('Renamed cluster')).catch(() => {})
   }, [id, patchNode])
 
+  const handleRecolorCluster = useCallback((clusterId: string, color: string | null) => {
+    // Optimistic: update canvas + side panel immediately, persist in background.
+    patchNode(clusterId, { color: color ?? undefined })
+    setSelectedNode((prev) => prev?.id === clusterId ? { ...prev, color: color ?? undefined } as typeof prev : prev)
+    fetch(`/api/session/${id}/cluster`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clusterId, color }),
+      keepalive: true,
+    }).then(() => void touchSession('Recolored cluster')).catch(() => {})
+  }, [id, patchNode])
+
   function handleAiUnavailable(reason: 'quota' | 'error') {
     setAiAvailable(false)
     setAiReason(reason)
@@ -749,14 +765,15 @@ export default function SessionPage({ params }: PageProps) {
       {/* Auth controls + history toolbar — top-right overlay */}
       <div
         className="absolute top-3 z-30 flex items-center gap-2 transition-[right] duration-[250ms]"
-        style={{ right: (selectedNode ? rightWidth : 0) + 12 }}
+        style={{ right: (selectedNode && !isMobile ? rightWidth : 0) + 12 }}
       >
         <span
           className={`text-[11px] text-slate-400 dark:text-slate-500 select-none transition-opacity duration-500 ${autoSaved ? 'opacity-100' : 'opacity-0'}`}
         >
           Auto-saved
         </span>
-        <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm p-0.5 shadow-sm">
+        {/* Undo/redo/history is a desktop-only precision toolbar. */}
+        <div className={`items-center gap-0.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm p-0.5 shadow-sm ${isMobile ? 'hidden' : 'flex'}`}>
           <button
             onClick={() => history.undo()}
             disabled={!history.canUndo}
@@ -845,36 +862,78 @@ export default function SessionPage({ params }: PageProps) {
         />
       )}
       <div className="flex flex-1 overflow-hidden min-h-0">
-        <LeftSidebar
-          onGoDeeper={handleGoDeeper}
-          onExport={handleExport}
-          onSave={handleSave}
-          isLoggedIn={isLoggedIn}
-          isSaved={isSaved}
-          saving={saving}
-          flaggedItems={flaggedItems}
-          onJumpToNode={handleJumpToNode}
-          onApplyDateFilter={handleApplyDateFilter}
-          aiAvailable={aiAvailable}
-          allNodes={graphData?.nodes}
-          selectedNodeType={selectedNode?.nodeType ?? null}
-          goingDeeper={goingDeeper}
-          reclustering={reclustering}
-          onRerunDomain={handleRerunDomain}
-          onUnpruneCluster={handleUnprune}
-          width={leftWidth}
-        />
+        {isMobile ? (
+          /* Phone: left controls live in a modal drawer toggled by the menu button. */
+          leftOpen && (
+            <div className="fixed inset-0 z-50 flex">
+              <LeftSidebar
+                onGoDeeper={handleGoDeeper}
+                onExport={handleExport}
+                onSave={handleSave}
+                isLoggedIn={isLoggedIn}
+                isSaved={isSaved}
+                saving={saving}
+                flaggedItems={flaggedItems}
+                onJumpToNode={(nodeId) => { handleJumpToNode(nodeId); setLeftOpen(false) }}
+                onApplyDateFilter={handleApplyDateFilter}
+                aiAvailable={aiAvailable}
+                allNodes={graphData?.nodes}
+                selectedNodeType={selectedNode?.nodeType ?? null}
+                goingDeeper={goingDeeper}
+                reclustering={reclustering}
+                onRerunDomain={handleRerunDomain}
+                onUnpruneCluster={handleUnprune}
+                width={284}
+                mobile
+                onClose={() => setLeftOpen(false)}
+              />
+              <div className="flex-1 bg-black/40 backdrop-blur-[1px]" onClick={() => setLeftOpen(false)} />
+            </div>
+          )
+        ) : (
+          <LeftSidebar
+            onGoDeeper={handleGoDeeper}
+            onExport={handleExport}
+            onSave={handleSave}
+            isLoggedIn={isLoggedIn}
+            isSaved={isSaved}
+            saving={saving}
+            flaggedItems={flaggedItems}
+            onJumpToNode={handleJumpToNode}
+            onApplyDateFilter={handleApplyDateFilter}
+            aiAvailable={aiAvailable}
+            allNodes={graphData?.nodes}
+            selectedNodeType={selectedNode?.nodeType ?? null}
+            goingDeeper={goingDeeper}
+            reclustering={reclustering}
+            onRerunDomain={handleRerunDomain}
+            onUnpruneCluster={handleUnprune}
+            width={leftWidth}
+          />
+        )}
         {/* Center+right column: canvas/right-sidebar row stacked above the chat drawer.
             ChatBar lives INSIDE this column so it never covers Zone A (LeftSidebar),
             which stays full-height and interactive while the chat is open. */}
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <div className="flex flex-1 min-h-0 overflow-hidden">
             <div className="flex-1 relative overflow-hidden flex">
-              {/* left resize handle */}
-              <div
-                className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400/30 z-10 transition-colors"
-                onPointerDown={startLeftResize}
-              />
+              {/* left resize handle — desktop only */}
+              {!isMobile && (
+                <div
+                  className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400/30 z-10 transition-colors"
+                  onPointerDown={startLeftResize}
+                />
+              )}
+              {/* Phone: floating menu button to open the controls drawer. */}
+              {isMobile && !selectedNode && (
+                <button
+                  onClick={() => setLeftOpen(true)}
+                  className="absolute top-3 left-3 z-40 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/85 dark:bg-slate-900/85 backdrop-blur-sm text-slate-600 dark:text-slate-300 shadow-sm"
+                  title="Menu"
+                >
+                  <Menu className="w-5 h-5" />
+                </button>
+              )}
               <GraphCanvas
                 ref={canvasRef}
                 data={graphData!}
@@ -893,19 +952,29 @@ export default function SessionPage({ params }: PageProps) {
                     Exit focus mode
                   </button>
                 </div>
-              ) : (
+              ) : !isMobile ? (
                 <div className="absolute top-3 left-4 z-30">
                   <Breadcrumb sessionId={id} />
                 </div>
+              ) : null}
+              {/* right resize handle — desktop only */}
+              {!isMobile && (
+                <div
+                  className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400/30 z-10 transition-colors"
+                  onPointerDown={startRightResize}
+                />
               )}
-              {/* right resize handle */}
-              <div
-                className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400/30 z-10 transition-colors"
-                onPointerDown={startRightResize}
-              />
             </div>
-            <div style={{ width: selectedNode ? rightWidth : 0, transition: 'width 0.25s', overflow: 'hidden', flexShrink: 0 }}>
-              <div style={{ width: rightWidth }} className="h-full">
+            {/* On phones the detail panel is a full-screen overlay (one panel at a time);
+                on desktop it's an inline column that shrinks the canvas. */}
+            <div
+              style={
+                isMobile
+                  ? { position: 'fixed', inset: 0, zIndex: 40, display: selectedNode ? 'block' : 'none' }
+                  : { width: selectedNode ? rightWidth : 0, transition: 'width 0.25s', overflow: 'hidden', flexShrink: 0 }
+              }
+            >
+              <div style={{ width: isMobile ? '100%' : rightWidth }} className="h-full">
                 <RightSidebar
                   node={selectedNode}
                   onClose={() => handleSelectNode(null, null)}
@@ -924,6 +993,7 @@ export default function SessionPage({ params }: PageProps) {
                   onDrillCluster={handleDrillCluster}
                   drilling={drilling}
                   onRenameCluster={handleRenameCluster}
+                  onRecolorCluster={handleRecolorCluster}
                 />
               </div>
             </div>
